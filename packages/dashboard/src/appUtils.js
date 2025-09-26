@@ -195,6 +195,11 @@ export const apiHandler = {
 						contentType: file.type,
 					}),
 				),
+				customMetadata: encode(
+					JSON.stringify({
+						"cache-version": Date.now().toString(),
+					}),
+				),
 			},
 		});
 	},
@@ -227,6 +232,11 @@ export const apiHandler = {
 						httpMetadata: encode(
 							JSON.stringify({
 								contentType: file.type,
+							}),
+						),
+						customMetadata: encode(
+							JSON.stringify({
+								"cache-version": Date.now().toString(),
 							}),
 						),
 					},
@@ -321,6 +331,24 @@ export const apiHandler = {
 
 		return [...contentFolders, ...contentFiles];
 	},
+	refreshCacheVersion: async (bucket, key) => {
+		const file = await apiHandler.headFile(bucket, key);
+		if (!file) {
+			throw new Error("File not found");
+		}
+
+		const customMetadata = {
+			...(file.customMetadata || {}),
+			"cache-version": Date.now().toString(),
+		};
+
+		return await apiHandler.updateMetadata(
+			bucket,
+			key,
+			customMetadata,
+			file.httpMetadata || {},
+		);
+	},
 };
 
 export const isMediaFile = (filename) => {
@@ -354,13 +382,17 @@ export const getMediaType = (filename) => {
 
 export const getThumbnailUrl = (file, bucket) => {
 	const mainStore = useMainStore();
+	const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
 
+	let baseUrl;
 	if (
 		mainStore.directLinkSettings.enabled &&
 		mainStore.directLinkSettings.baseUrl
 	) {
-		return `${mainStore.directLinkSettings.baseUrl}/${bucket}/${file.key}`;
+		baseUrl = `${mainStore.directLinkSettings.baseUrl}/${bucket}/${file.key}`;
+	} else {
+		baseUrl = `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(file.key)}`;
 	}
 
-	return `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(file.key)}`;
+	return `${baseUrl}?v=${cacheVersion}`;
 };

@@ -152,15 +152,19 @@ export default {
 		},
 		getMediaUrl(file) {
 			const mainStore = useMainStore();
+			const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
 
+			let baseUrl;
 			if (
 				mainStore.directLinkSettings.enabled &&
 				mainStore.directLinkSettings.baseUrl
 			) {
-				return `${mainStore.directLinkSettings.baseUrl}/${this.bucket}/${file.key}`;
+				baseUrl = `${mainStore.directLinkSettings.baseUrl}/${this.bucket}/${file.key}`;
+			} else {
+				baseUrl = `${mainStore.serverUrl}/api/buckets/${this.bucket}/${encode(file.key)}`;
 			}
 
-			return `${mainStore.serverUrl}/api/buckets/${this.bucket}/${encode(file.key)}`;
+			return `${baseUrl}?v=${cacheVersion}`;
 		},
 	},
 	watch: {

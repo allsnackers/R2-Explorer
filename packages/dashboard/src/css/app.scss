@@ -32,6 +32,31 @@
   object-fit: cover;
 }
 
+.bulk-action-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  padding: 12px 24px;
+  min-width: 400px;
+  max-width: 600px;
+}
+
+.bulk-action-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-action-text {
+  font-weight: 500;
+  color: #333;
+}
+
 $xs-breakpoint: 718px;
 $sm-breakpoint: 1024px;
 $md-breakpoint: 1439px;
