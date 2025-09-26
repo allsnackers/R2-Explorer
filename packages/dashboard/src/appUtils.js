@@ -322,3 +322,45 @@ export const apiHandler = {
 		return [...contentFolders, ...contentFiles];
 	},
 };
+
+export const isMediaFile = (filename) => {
+	const ext = filename.toLowerCase().split(".").pop();
+	const mediaExts = [
+		"png",
+		"jpg",
+		"jpeg",
+		"webp",
+		"avif",
+		"gif",
+		"bmp",
+		"svg",
+		"mp4",
+		"ogg",
+		"webm",
+		"mov",
+	];
+	return mediaExts.includes(ext);
+};
+
+export const getMediaType = (filename) => {
+	const ext = filename.toLowerCase().split(".").pop();
+	const imageExts = ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"];
+	const videoExts = ["mp4", "ogg", "webm", "mov"];
+
+	if (imageExts.includes(ext)) return "image";
+	if (videoExts.includes(ext)) return "video";
+	return null;
+};
+
+export const getThumbnailUrl = (file, bucket) => {
+	const mainStore = useMainStore();
+
+	if (
+		mainStore.directLinkSettings.enabled &&
+		mainStore.directLinkSettings.baseUrl
+	) {
+		return `${mainStore.directLinkSettings.baseUrl}/${bucket}/${file.key}`;
+	}
+
+	return `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(file.key)}`;
+};

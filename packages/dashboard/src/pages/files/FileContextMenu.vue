@@ -59,7 +59,15 @@ export default {
 		},
 		shareObject: async function () {
 			let url;
-			if (this.prop.row.type === "folder") {
+
+			if (
+				this.mainStore.directLinkSettings.enabled &&
+				this.mainStore.directLinkSettings.baseUrl &&
+				this.prop.row.type === "file"
+			) {
+				const baseUrl = this.mainStore.directLinkSettings.baseUrl;
+				url = `${baseUrl}/${this.selectedBucket}/${this.prop.row.key}`;
+			} else if (this.prop.row.type === "folder") {
 				url =
 					window.location.origin +
 					this.$router.resolve({

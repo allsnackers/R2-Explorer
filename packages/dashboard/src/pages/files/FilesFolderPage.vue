@@ -39,6 +39,22 @@
             </div>
           </template>
 
+          <template v-slot:body-cell-thumbnail="prop">
+            <td class="thumbnail-cell">
+              <div
+                v-if="prop.row.type === 'file' && isMediaFile(prop.row.name)"
+                class="file-thumbnail"
+                @click.stop="openGallery(prop.row)"
+              >
+                <img
+                  :src="getThumbnailUrl(prop.row, selectedBucket)"
+                  :alt="prop.row.name"
+                  class="thumbnail-image"
+                />
+              </div>
+            </td>
+          </template>
+
           <template v-slot:body-cell-name="prop">
             <td class="flex" style="align-items: center">
               <q-icon :name="prop.row.icon" size="sm" :color="prop.row.color" class="q-mr-xs" />
@@ -76,25 +92,48 @@
 
   <file-preview ref="preview"/>
   <file-options ref="options" />
+  <media-gallery ref="gallery" :mediaFiles="mediaFiles" :bucket="selectedBucket" />
 </template>
 
 <script>
 import FileOptions from "components/files/FileOptions.vue";
 import FilePreview from "components/preview/FilePreview.vue";
+import MediaGallery from "components/preview/MediaGallery.vue";
 import DragAndDrop from "components/utils/DragAndDrop.vue";
 import FileContextMenu from "pages/files/FileContextMenu.vue";
 import { useQuasar } from "quasar";
 import { useMainStore } from "stores/main-store";
 import { defineComponent } from "vue";
-import { ROOT_FOLDER, apiHandler, decode, encode } from "../../appUtils";
+import {
+	ROOT_FOLDER,
+	apiHandler,
+	decode,
+	encode,
+	getThumbnailUrl,
+	isMediaFile,
+} from "../../appUtils";
 
 export default defineComponent({
 	name: "FilesIndexPage",
-	components: { FileContextMenu, FileOptions, DragAndDrop, FilePreview },
+	components: {
+		FileContextMenu,
+		FileOptions,
+		DragAndDrop,
+		FilePreview,
+		MediaGallery,
+	},
 	data: () => ({
 		loading: false,
 		rows: [],
 		columns: [
+			{
+				name: "thumbnail",
+				label: "",
+				align: "center",
+				field: "thumbnail",
+				sortable: false,
+				style: "width: 60px",
+			},
 			{
 				name: "name",
 				required: true,
@@ -151,6 +190,11 @@ export default defineComponent({
 	computed: {
 		selectedBucket: function () {
 			return this.$route.params.bucket;
+		},
+		mediaFiles: function () {
+			return this.rows.filter(
+				(row) => row.type === "file" && isMediaFile(row.name),
+			);
 		},
 		selectedFolder: function () {
 			if (
@@ -265,6 +309,14 @@ export default defineComponent({
 			const file = await apiHandler.headFile(this.selectedBucket, key);
 			this.$refs.preview.openFile(file);
 		},
+		openGallery: function (file) {
+			const mediaIndex = this.mediaFiles.findIndex((f) => f.key === file.key);
+			if (mediaIndex !== -1) {
+				this.$refs.gallery.open(mediaIndex);
+			}
+		},
+		isMediaFile,
+		getThumbnailUrl,
 	},
 	created() {
 		this.fetchFiles();

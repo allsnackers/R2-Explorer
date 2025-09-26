@@ -12,6 +12,12 @@ export const useMainStore = defineStore("main", {
 
 		// Frontend data
 		buckets: [],
+
+		// Direct link settings
+		directLinkSettings: {
+			enabled: false,
+			baseUrl: "",
+		},
 	}),
 	getters: {
 		serverUrl() {
@@ -22,6 +28,16 @@ export const useMainStore = defineStore("main", {
 		},
 	},
 	actions: {
+		loadDirectLinkSettings() {
+			const stored = localStorage.getItem("r2explorer-direct-link-settings");
+			if (stored) {
+				try {
+					this.directLinkSettings = JSON.parse(stored);
+				} catch (e) {
+					console.error("Failed to load direct link settings:", e);
+				}
+			}
+		},
 		async loadServerConfigs(router, q, handleError = false) {
 			// This is the initial requests to server, that also checks if user needs auth
 
@@ -36,6 +52,8 @@ export const useMainStore = defineStore("main", {
 				this.version = response.data.version;
 				this.showHiddenFiles = response.data.config.showHiddenFiles;
 				this.buckets = response.data.buckets;
+
+				this.loadDirectLinkSettings();
 
 				const url = new URL(window.location.href);
 				if (url.searchParams.get("next")) {
