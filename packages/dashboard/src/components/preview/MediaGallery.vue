@@ -131,6 +131,28 @@ export default {
 			this.isOpen = false;
 			this.$emit("close");
 		},
+		handleKeydown(event) {
+			if (!this.isOpen) {
+				return;
+			}
+
+			switch (event.key) {
+				case "Escape":
+					event.preventDefault();
+					this.handleClose();
+					break;
+				case "ArrowLeft":
+					event.preventDefault();
+					this.navigatePrev();
+					break;
+				case "ArrowRight":
+					event.preventDefault();
+					this.navigateNext();
+					break;
+				default:
+					break;
+			}
+		},
 		navigatePrev() {
 			if (this.currentIndex > 0) {
 				this.currentIndex--;
@@ -146,25 +168,23 @@ export default {
 			const imageExts = ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"];
 			const videoExts = ["mp4", "ogg", "webm", "mov"];
 
-			if (imageExts.includes(ext)) return "image";
-			if (videoExts.includes(ext)) return "video";
+			if (imageExts.includes(ext)) {
+				return "image";
+			}
+			if (videoExts.includes(ext)) {
+				return "video";
+			}
 			return null;
 		},
 		getMediaUrl(file) {
-			const mainStore = useMainStore();
 			const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
+			const { directLinkSettings, serverUrl } = this.mainStore;
 
-			let baseUrl;
-			if (
-				mainStore.directLinkSettings.enabled &&
-				mainStore.directLinkSettings.baseUrl
-			) {
-				baseUrl = `${mainStore.directLinkSettings.baseUrl}/${this.bucket}/${file.key}`;
-			} else {
-				baseUrl = `${mainStore.serverUrl}/api/buckets/${this.bucket}/${encode(file.key)}`;
+			if (directLinkSettings.enabled && directLinkSettings.baseUrl) {
+				return `${directLinkSettings.baseUrl}/${this.bucket}/${file.key}?v=${cacheVersion}`;
 			}
 
-			return `${baseUrl}?v=${cacheVersion}`;
+			return `${serverUrl}/api/buckets/${this.bucket}/${encode(file.key)}?v=${cacheVersion}`;
 		},
 	},
 	watch: {
@@ -172,41 +192,12 @@ export default {
 			this.currentIndex = newVal;
 		},
 	},
-methods: {
-	open(index = 0) {
-		this.currentIndex = index;
-		this.isOpen = true;
+	mounted() {
+		document.addEventListener("keydown", this.handleKeydown);
 	},
-	handleClose() {
-		this.isOpen = false;
-		this.$emit("close");
+	beforeUnmount() {
+		document.removeEventListener("keydown", this.handleKeydown);
 	},
-	handleKeydown(e) {
-		if (!this.isOpen) return;
-		if (e.key === "Escape") {
-			e.preventDefault();
-			this.handleClose();
-		} else if (e.key === "ArrowLeft") {
-			e.preventDefault();
-			this.navigatePrev();
-		} else if (e.key === "ArrowRight") {
-			e.preventDefault();
-			this.navigateNext();
-		}
-	},
-	navigatePrev() {
-		if (this.currentIndex > 0) {
-			this.currentIndex--;
-		}
-	},
-	// …other methods (e.g. navigateNext)
-},
-mounted() {
-	document.addEventListener("keydown", this.handleKeydown);
-},
-beforeUnmount() {
-	document.removeEventListener("keydown", this.handleKeydown);
-},
 	setup() {
 		return {
 			mainStore: useMainStore(),
