@@ -399,7 +399,7 @@ export default defineComponent({
 			});
 		},
 		handleBulkRefreshCache: async function () {
-			let filesToRefresh = [];
+			const filesToRefresh = [];
 
 			for (const row of this.selectedRows) {
 				if (row.type === "folder") {
@@ -408,7 +408,9 @@ export default defineComponent({
 						row.key,
 						"",
 					);
-					filesToRefresh.push(...folderContents.filter((f) => f.type === "file"));
+					filesToRefresh.push(
+						...folderContents.filter((f) => f.type === "file"),
+					);
 				} else {
 					filesToRefresh.push(row);
 				}
@@ -432,7 +434,8 @@ export default defineComponent({
 			} else {
 				this.q.notify({
 					type: "warning",
-					message: "Bulk delete not yet implemented. Please delete items one at a time.",
+					message:
+						"Bulk delete not yet implemented. Please delete items one at a time.",
 				});
 			}
 		},

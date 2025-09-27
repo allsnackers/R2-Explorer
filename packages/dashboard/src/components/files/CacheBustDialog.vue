@@ -64,9 +64,9 @@
 </template>
 
 <script>
-import { defineComponent } from "vue";
 import { useQuasar } from "quasar";
 import { apiHandler } from "src/appUtils";
+import { defineComponent } from "vue";
 
 export default defineComponent({
 	name: "CacheBustDialog",
