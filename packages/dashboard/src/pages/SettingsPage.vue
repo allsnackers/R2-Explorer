@@ -145,10 +145,9 @@
 </template>
 
 <script>
-import { useMainStore } from "stores/main-store";
-import { useQuasar } from "quasar";
 import { defineComponent } from "vue";
-
+import { useQuasar } from "quasar";
+import { useMainStore } from "stores/main-store";
 export default defineComponent({
 	name: "SettingsPage",
 	data: () => ({
