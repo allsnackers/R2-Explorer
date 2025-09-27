@@ -172,12 +172,41 @@ export default {
 			this.currentIndex = newVal;
 		},
 	},
-	mounted() {
-		document.addEventListener("keydown", this.handleKeydown);
+methods: {
+	open(index = 0) {
+		this.currentIndex = index;
+		this.isOpen = true;
 	},
-	beforeUnmount() {
-		document.removeEventListener("keydown", this.handleKeydown);
+	handleClose() {
+		this.isOpen = false;
+		this.$emit("close");
 	},
+	handleKeydown(e) {
+		if (!this.isOpen) return;
+		if (e.key === "Escape") {
+			e.preventDefault();
+			this.handleClose();
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			this.navigatePrev();
+		} else if (e.key === "ArrowRight") {
+			e.preventDefault();
+			this.navigateNext();
+		}
+	},
+	navigatePrev() {
+		if (this.currentIndex > 0) {
+			this.currentIndex--;
+		}
+	},
+	// …other methods (e.g. navigateNext)
+},
+mounted() {
+	document.addEventListener("keydown", this.handleKeydown);
+},
+beforeUnmount() {
+	document.removeEventListener("keydown", this.handleKeydown);
+},
 	setup() {
 		return {
 			mainStore: useMainStore(),
