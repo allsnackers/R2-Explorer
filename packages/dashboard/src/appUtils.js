@@ -195,6 +195,11 @@ export const apiHandler = {
 						contentType: file.type,
 					}),
 				),
+				customMetadata: encode(
+					JSON.stringify({
+						"cache-version": Date.now().toString(),
+					}),
+				),
 			},
 		});
 	},
@@ -227,6 +232,11 @@ export const apiHandler = {
 						httpMetadata: encode(
 							JSON.stringify({
 								contentType: file.type,
+							}),
+						),
+						customMetadata: encode(
+							JSON.stringify({
+								"cache-version": Date.now().toString(),
 							}),
 						),
 					},
@@ -321,4 +331,68 @@ export const apiHandler = {
 
 		return [...contentFolders, ...contentFiles];
 	},
+	refreshCacheVersion: async (bucket, key) => {
+		const file = await apiHandler.headFile(bucket, key);
+		if (!file) {
+			throw new Error("File not found");
+		}
+
+		const customMetadata = {
+			...(file.customMetadata || {}),
+			"cache-version": Date.now().toString(),
+		};
+
+		return await apiHandler.updateMetadata(
+			bucket,
+			key,
+			customMetadata,
+			file.httpMetadata || {},
+		);
+	},
+};
+
+export const isMediaFile = (filename) => {
+	const ext = filename.toLowerCase().split(".").pop();
+	const mediaExts = [
+		"png",
+		"jpg",
+		"jpeg",
+		"webp",
+		"avif",
+		"gif",
+		"bmp",
+		"svg",
+		"mp4",
+		"ogg",
+		"webm",
+		"mov",
+	];
+	return mediaExts.includes(ext);
+};
+
+export const getMediaType = (filename) => {
+	const ext = filename.toLowerCase().split(".").pop();
+	const imageExts = ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"];
+	const videoExts = ["mp4", "ogg", "webm", "mov"];
+
+	if (imageExts.includes(ext)) return "image";
+	if (videoExts.includes(ext)) return "video";
+	return null;
+};
+
+export const getThumbnailUrl = (file, bucket) => {
+	const mainStore = useMainStore();
+	const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
+
+	let baseUrl;
+	if (
+		mainStore.directLinkSettings.enabled &&
+		mainStore.directLinkSettings.baseUrl
+	) {
+		baseUrl = `${mainStore.directLinkSettings.baseUrl}/${bucket}/${file.key}`;
+	} else {
+		baseUrl = `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(file.key)}`;
+	}
+
+	return `${baseUrl}?v=${cacheVersion}`;
 };

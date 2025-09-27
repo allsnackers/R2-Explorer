@@ -6,6 +6,12 @@
     <q-item clickable v-close-popup @click="downloadObject" v-if="prop.row.type === 'file'">
       <q-item-section>Download</q-item-section>
     </q-item>
+    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="prop.row.type === 'file'">
+      <q-item-section>Refresh Cache Version</q-item-section>
+    </q-item>
+    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="prop.row.type === 'folder'">
+      <q-item-section>Refresh Cache (Recursive)</q-item-section>
+    </q-item>
     <q-item clickable v-close-popup @click="renameObject" v-if="prop.row.type === 'file'">
       <q-item-section>Rename</q-item-section>
     </q-item>
@@ -57,9 +63,20 @@ export default {
 		deleteObject: function () {
 			this.$emit("deleteObject", this.prop.row);
 		},
+		refreshCacheVersion: function () {
+			this.$emit("refreshCacheVersion", this.prop.row);
+		},
 		shareObject: async function () {
 			let url;
-			if (this.prop.row.type === "folder") {
+
+			if (
+				this.mainStore.directLinkSettings.enabled &&
+				this.mainStore.directLinkSettings.baseUrl &&
+				this.prop.row.type === "file"
+			) {
+				const baseUrl = this.mainStore.directLinkSettings.baseUrl;
+				url = `${baseUrl}/${this.selectedBucket}/${this.prop.row.key}`;
+			} else if (this.prop.row.type === "folder") {
 				url =
 					window.location.origin +
 					this.$router.resolve({

@@ -25,6 +25,11 @@ const routes = [
 				component: HomePage,
 			},
 			{
+				path: "/settings",
+				name: "settings",
+				component: () => import("pages/SettingsPage.vue"),
+			},
+			{
 				path: "/:bucket/files",
 				name: "files-home",
 				component: FilesFolderPage,

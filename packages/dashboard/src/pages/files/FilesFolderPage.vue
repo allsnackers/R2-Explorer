@@ -11,13 +11,15 @@
           ref="table"
           :rows="rows"
           :columns="columns"
-          row-key="name"
+          row-key="key"
           :loading="loading"
           :hide-pagination="true"
           :rows-per-page-options="[0]"
           column-sort-order="da"
           :flat="true"
           table-class="file-list"
+          selection="multiple"
+          v-model:selected="selectedRows"
           @row-dblclick="openRowClick"
           @row-click="openRowDlbClick"
         >
@@ -39,6 +41,22 @@
             </div>
           </template>
 
+          <template v-slot:body-cell-thumbnail="prop">
+            <td class="thumbnail-cell">
+              <div
+                v-if="prop.row.type === 'file' && isMediaFile(prop.row.name)"
+                class="file-thumbnail"
+                @click.stop="openGallery(prop.row)"
+              >
+                <img
+                  :src="getThumbnailUrl(prop.row, selectedBucket)"
+                  :alt="prop.row.name"
+                  class="thumbnail-image"
+                />
+              </div>
+            </td>
+          </template>
+
           <template v-slot:body-cell-name="prop">
             <td class="flex" style="align-items: center">
               <q-icon :name="prop.row.icon" size="sm" :color="prop.row.color" class="q-mr-xs" />
@@ -54,7 +72,7 @@
               touch-position
               context-menu
             >
-              <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject"  />
+              <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache"  />
             </q-menu>
           </template>
 
@@ -62,7 +80,7 @@
             <td class="text-right">
               <q-btn round flat icon="more_vert" size="sm">
                 <q-menu>
-                  <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" />
+                  <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache" />
                 </q-menu>
               </q-btn>
             </td>
@@ -71,30 +89,93 @@
 
       </drag-and-drop>
 
+      <div v-if="selectedRows.length > 0" class="bulk-action-toolbar">
+        <div class="bulk-action-content">
+          <q-checkbox
+            v-model="allSelected"
+            @update:model-value="toggleSelectAll"
+            class="q-mr-sm"
+          />
+          <span class="bulk-action-text">{{ selectedRows.length }} item{{ selectedRows.length > 1 ? 's' : '' }} selected</span>
+          <q-space />
+          <q-btn
+            flat
+            dense
+            label="Refresh Cache"
+            icon="refresh"
+            color="orange"
+            @click="handleBulkRefreshCache"
+            class="q-mr-sm"
+          />
+          <q-btn
+            flat
+            dense
+            label="Delete"
+            icon="delete"
+            color="red"
+            @click="handleBulkDelete"
+            class="q-mr-sm"
+          />
+          <q-btn
+            flat
+            dense
+            label="Cancel"
+            @click="clearSelection"
+          />
+        </div>
+      </div>
+
     </div>
   </q-page>
 
   <file-preview ref="preview"/>
   <file-options ref="options" />
+  <media-gallery ref="gallery" :mediaFiles="mediaFiles" :bucket="selectedBucket" />
+  <cache-bust-dialog ref="cacheDialog" />
 </template>
 
 <script>
+import CacheBustDialog from "components/files/CacheBustDialog.vue";
 import FileOptions from "components/files/FileOptions.vue";
 import FilePreview from "components/preview/FilePreview.vue";
+import MediaGallery from "components/preview/MediaGallery.vue";
 import DragAndDrop from "components/utils/DragAndDrop.vue";
 import FileContextMenu from "pages/files/FileContextMenu.vue";
 import { useQuasar } from "quasar";
 import { useMainStore } from "stores/main-store";
 import { defineComponent } from "vue";
-import { ROOT_FOLDER, apiHandler, decode, encode } from "../../appUtils";
+import {
+	ROOT_FOLDER,
+	apiHandler,
+	decode,
+	encode,
+	getThumbnailUrl,
+	isMediaFile,
+} from "../../appUtils";
 
 export default defineComponent({
 	name: "FilesIndexPage",
-	components: { FileContextMenu, FileOptions, DragAndDrop, FilePreview },
+	components: {
+		CacheBustDialog,
+		FileContextMenu,
+		FileOptions,
+		DragAndDrop,
+		FilePreview,
+		MediaGallery,
+	},
 	data: () => ({
 		loading: false,
 		rows: [],
+		selectedRows: [],
 		columns: [
+			{
+				name: "thumbnail",
+				label: "",
+				align: "center",
+				field: "thumbnail",
+				sortable: false,
+				style: "width: 60px",
+			},
 			{
 				name: "name",
 				required: true,
@@ -151,6 +232,26 @@ export default defineComponent({
 	computed: {
 		selectedBucket: function () {
 			return this.$route.params.bucket;
+		},
+		mediaFiles: function () {
+			return this.rows.filter(
+				(row) => row.type === "file" && isMediaFile(row.name),
+			);
+		},
+		allSelected: {
+			get() {
+				return (
+					this.selectedRows.length > 0 &&
+					this.selectedRows.length === this.rows.length
+				);
+			},
+			set(val) {
+				if (val) {
+					this.selectedRows = [...this.rows];
+				} else {
+					this.selectedRows = [];
+				}
+			},
 		},
 		selectedFolder: function () {
 			if (
@@ -265,6 +366,87 @@ export default defineComponent({
 			const file = await apiHandler.headFile(this.selectedBucket, key);
 			this.$refs.preview.openFile(file);
 		},
+		openGallery: function (file) {
+			const mediaIndex = this.mediaFiles.findIndex((f) => f.key === file.key);
+			if (mediaIndex !== -1) {
+				this.$refs.gallery.open(mediaIndex);
+			}
+		},
+		handleRefreshCache: async function (row) {
+			const isFolder = row.type === "folder";
+			let filesToRefresh = [];
+
+			if (isFolder) {
+				const folderContents = await apiHandler.fetchFile(
+					this.selectedBucket,
+					row.key,
+					"",
+				);
+				filesToRefresh = folderContents.filter((f) => f.type === "file");
+			} else {
+				filesToRefresh = [row];
+			}
+
+			this.$refs.cacheDialog.open({
+				bucket: this.selectedBucket,
+				files: filesToRefresh,
+				fileCount: filesToRefresh.length,
+				itemName: row.name,
+				isRecursive: isFolder,
+				onComplete: () => {
+					this.fetchFiles();
+				},
+			});
+		},
+		handleBulkRefreshCache: async function () {
+			const filesToRefresh = [];
+
+			for (const row of this.selectedRows) {
+				if (row.type === "folder") {
+					const folderContents = await apiHandler.fetchFile(
+						this.selectedBucket,
+						row.key,
+						"",
+					);
+					filesToRefresh.push(
+						...folderContents.filter((f) => f.type === "file"),
+					);
+				} else {
+					filesToRefresh.push(row);
+				}
+			}
+
+			this.$refs.cacheDialog.open({
+				bucket: this.selectedBucket,
+				files: filesToRefresh,
+				fileCount: filesToRefresh.length,
+				itemName: `${this.selectedRows.length} items`,
+				isRecursive: false,
+				onComplete: () => {
+					this.fetchFiles();
+					this.clearSelection();
+				},
+			});
+		},
+		handleBulkDelete: function () {
+			if (this.selectedRows.length === 1) {
+				this.$refs.options.deleteObject(this.selectedRows[0]);
+			} else {
+				this.q.notify({
+					type: "warning",
+					message:
+						"Bulk delete not yet implemented. Please delete items one at a time.",
+				});
+			}
+		},
+		toggleSelectAll: function (val) {
+			this.allSelected = val;
+		},
+		clearSelection: function () {
+			this.selectedRows = [];
+		},
+		isMediaFile,
+		getThumbnailUrl,
 	},
 	created() {
 		this.fetchFiles();
