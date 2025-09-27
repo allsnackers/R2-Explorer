@@ -165,7 +165,16 @@ export default {
 		},
 		getMediaType(filename) {
 			const ext = filename.toLowerCase().split(".").pop();
-			const imageExts = ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"];
+			const imageExts = [
+				"png",
+				"jpg",
+				"jpeg",
+				"webp",
+				"avif",
+				"gif",
+				"bmp",
+				"svg",
+			];
 			const videoExts = ["mp4", "ogg", "webm", "mov"];
 
 			if (imageExts.includes(ext)) {
