@@ -1,13 +1,26 @@
 <template>
   <q-dialog v-model="deleteModal" @hide="reset">
     <q-card>
-      <q-card-section class="row column" v-if="row">
+      <q-card-section class="row column" v-if="row || rows.length > 0">
         <q-avatar class="q-mb-md" icon="delete" color="red" text-color="white" />
-        <span v-if="row.type === 'folder'" class="q-ml-sm">Are you sure you want to delete the folder <code>{{row.name}}</code>, and
+        <span v-if="rows.length > 1" class="q-ml-sm">Are you sure you want to delete <code>{{rows.length}}</code> items?</span>
+        <span v-else-if="row && row.type === 'folder'" class="q-ml-sm">Are you sure you want to delete the folder <code>{{row.name}}</code>, and
           <code v-if="deleteFolderInnerFilesCount !== null">{{deleteFolderInnerFilesCount}}</code>
           <code v-else><q-spinner color="primary"/></code>
           files inside?</span>
-        <span v-else class="q-ml-sm">Are you sure you want to delete the file <code>{{row.name}}</code>?</span>
+        <span v-else-if="row" class="q-ml-sm">Are you sure you want to delete the file <code>{{row.name}}</code>?</span>
+      </q-card-section>
+
+      <q-card-section>
+        <q-checkbox v-model="permanentDelete" label="Permanently delete (cannot be undone)" />
+        <div class="text-caption text-grey-7 q-mt-sm">
+          <template v-if="permanentDelete">
+            Items will be permanently deleted from the bucket.
+          </template>
+          <template v-else>
+            Items will be moved to .trash/ folder and can be restored later.
+          </template>
+        </div>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -72,7 +85,7 @@
 
 <script>
 import { useQuasar } from "quasar";
-import { ROOT_FOLDER, apiHandler, decode, encode } from "src/appUtils";
+import { apiHandler, decode, ROOT_FOLDER } from "src/appUtils";
 import { useMainStore } from "stores/main-store";
 import { defineComponent } from "vue";
 
@@ -80,6 +93,7 @@ export default defineComponent({
 	name: "FileOptions",
 	data: () => ({
 		row: null,
+		rows: [],
 		deleteFolderContents: [],
 		deleteModal: false,
 		renameModal: false,
@@ -90,11 +104,14 @@ export default defineComponent({
 		updateCustomMetadata: [],
 		updateHttpMetadata: [],
 		loading: false,
+		permanentDelete: false,
 	}),
 	methods: {
 		deleteObject: async function (row) {
 			this.deleteModal = true;
 			this.row = row;
+			this.rows = [];
+			this.permanentDelete = row.key?.startsWith(".trash/");
 			if (row.type === "folder") {
 				this.deleteFolderContents = await apiHandler.fetchFile(
 					this.selectedBucket,
@@ -103,6 +120,12 @@ export default defineComponent({
 				);
 				this.deleteFolderInnerFilesCount = this.deleteFolderContents.length;
 			}
+		},
+		bulkDeleteObjects: async function (rows) {
+			this.deleteModal = true;
+			this.rows = rows;
+			this.row = null;
+			this.permanentDelete = rows.some((r) => r.key?.startsWith(".trash/"));
 		},
 		renameObject: async function (row) {
 			this.renameModal = true;
@@ -175,6 +198,11 @@ export default defineComponent({
 			});
 		},
 		deleteConfirm: async function () {
+			if (this.rows.length > 1) {
+				await this.bulkDeleteConfirm();
+				return;
+			}
+
 			if (this.row.type === "folder") {
 				// When deleting folders, first must copy the objects, because the popup close forces a reset on properties
 				const originalFolder = { ...this.row };
@@ -196,7 +224,7 @@ export default defineComponent({
 						await apiHandler.deleteObject(innerFile.key, this.selectedBucket);
 					}
 					notif({
-						caption: `${Number.parseInt((i * 100) / (folderContentsCount + 1))}%`, // +1 because still needs to delete the folder
+						caption: `${Number.parseInt((i * 100) / (folderContentsCount + 1), 10)}%`, // +1 because still needs to delete the folder
 					});
 				}
 
@@ -211,13 +239,101 @@ export default defineComponent({
 				});
 			} else {
 				this.deleteModal = false;
-				await apiHandler.deleteObject(this.row.key, this.selectedBucket);
-				this.q.notify({
-					group: false,
-					icon: "done", // we add an icon
-					spinner: false, // we reset the spinner setting so the icon can be displayed
-					message: "File deleted!",
-					timeout: 2500, // we will timeout it in 2.5s
+
+				if (this.permanentDelete) {
+					await apiHandler.deleteObject(this.row.key, this.selectedBucket);
+					this.q.notify({
+						group: false,
+						icon: "done",
+						spinner: false,
+						message: "File permanently deleted!",
+						timeout: 2500,
+					});
+				} else {
+					const timestamp = Date.now();
+					const trashKey = `.trash/${timestamp}/${this.row.key}`;
+					await apiHandler.renameObject(
+						this.selectedBucket,
+						this.row.key,
+						trashKey,
+					);
+					this.q.notify({
+						group: false,
+						icon: "done",
+						spinner: false,
+						message: "File moved to trash!",
+						timeout: 2500,
+					});
+				}
+			}
+
+			this.$bus.emit("fetchFiles");
+			this.reset();
+		},
+		bulkDeleteConfirm: async function () {
+			this.deleteModal = false;
+
+			const notif = this.q.notify({
+				group: false,
+				spinner: true,
+				message: "Deleting items...",
+				caption: "0%",
+				timeout: 0,
+			});
+
+			const timestamp = Date.now();
+
+			try {
+				for (let i = 0; i < this.rows.length; i++) {
+					const item = this.rows[i];
+
+					if (this.permanentDelete) {
+						if (item.type === "folder") {
+							const folderContents = await apiHandler.fetchFile(
+								this.selectedBucket,
+								item.key,
+								"",
+							);
+							for (const innerFile of folderContents) {
+								if (innerFile.key) {
+									await apiHandler.deleteObject(
+										innerFile.key,
+										this.selectedBucket,
+									);
+								}
+							}
+						}
+						await apiHandler.deleteObject(item.key, this.selectedBucket);
+					} else {
+						const trashKey = `.trash/${timestamp}/${item.key}`;
+						await apiHandler.renameObject(
+							this.selectedBucket,
+							item.key,
+							trashKey,
+						);
+					}
+
+					notif({
+						caption: `${Math.round(((i + 1) * 100) / this.rows.length)}%`,
+					});
+				}
+
+				notif({
+					icon: "done",
+					spinner: false,
+					caption: "100%",
+					message: this.permanentDelete
+						? `${this.rows.length} items permanently deleted!`
+						: `${this.rows.length} items moved to trash!`,
+					timeout: 2500,
+				});
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to delete items: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
 				});
 			}
 
@@ -233,8 +349,10 @@ export default defineComponent({
 			this.updateCustomMetadata = [];
 			this.updateHttpMetadata = [];
 			this.row = null;
+			this.rows = [];
 			this.deleteFolderInnerFilesCount = null;
 			this.deleteFolderContents = [];
+			this.permanentDelete = false;
 		},
 		onSubmit: async function () {
 			await apiHandler.createFolder(

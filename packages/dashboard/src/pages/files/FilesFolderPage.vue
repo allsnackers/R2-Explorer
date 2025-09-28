@@ -22,6 +22,8 @@
           v-model:selected="selectedRows"
           @row-dblclick="openRowClick"
           @row-click="openRowDlbClick"
+          @keydown="handleKeyDown"
+          tabindex="0"
         >
 
           <template v-slot:loading>
@@ -58,7 +60,19 @@
           </template>
 
           <template v-slot:body-cell-name="prop">
-            <td class="flex" style="align-items: center">
+            <td
+              class="flex"
+              style="align-items: center"
+              :draggable="!mainStore.apiReadonly"
+              @dragstart="handleDragStart($event, prop.row)"
+              @dragover="handleDragOver($event, prop.row)"
+              @dragleave="handleDragLeave($event, prop.row)"
+              @drop="handleDrop($event, prop.row)"
+              :class="{
+                'drop-target': dropTarget && dropTarget.key === prop.row.key,
+                'keyboard-focused': focusedRowIndex === prop.rowIndex
+              }"
+            >
               <q-icon :name="prop.row.icon" size="sm" :color="prop.row.color" class="q-mr-xs" />
               {{prop.row.name}}
             </td>
@@ -72,7 +86,7 @@
               touch-position
               context-menu
             >
-              <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache"  />
+              <FileContextMenu :prop="prop" :selectedRows="selectedRows" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache" @bulkMove="handleBulkMove" @bulkDelete="handleBulkDelete" />
             </q-menu>
           </template>
 
@@ -80,7 +94,7 @@
             <td class="text-right">
               <q-btn round flat icon="more_vert" size="sm">
                 <q-menu>
-                  <FileContextMenu :prop="prop" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache" />
+                  <FileContextMenu :prop="prop" :selectedRows="selectedRows" @openObject="openObject" @deleteObject="$refs.options.deleteObject" @renameObject="$refs.options.renameObject" @updateMetadataObject="$refs.options.updateMetadataObject" @refreshCacheVersion="handleRefreshCache" @bulkMove="handleBulkMove" @bulkDelete="handleBulkDelete" />
                 </q-menu>
               </q-btn>
             </td>
@@ -132,11 +146,13 @@
   <file-options ref="options" />
   <media-gallery ref="gallery" :mediaFiles="mediaFiles" :bucket="selectedBucket" />
   <cache-bust-dialog ref="cacheDialog" />
+  <move-folder-picker-dialog ref="moveDialog" @move="handleMoveComplete" />
 </template>
 
 <script>
 import CacheBustDialog from "components/files/CacheBustDialog.vue";
 import FileOptions from "components/files/FileOptions.vue";
+import MoveFolderPickerDialog from "components/files/MoveFolderPickerDialog.vue";
 import FilePreview from "components/preview/FilePreview.vue";
 import MediaGallery from "components/preview/MediaGallery.vue";
 import DragAndDrop from "components/utils/DragAndDrop.vue";
@@ -145,12 +161,12 @@ import { useQuasar } from "quasar";
 import { useMainStore } from "stores/main-store";
 import { defineComponent } from "vue";
 import {
-	ROOT_FOLDER,
 	apiHandler,
 	decode,
 	encode,
 	getThumbnailUrl,
 	isMediaFile,
+	ROOT_FOLDER,
 } from "../../appUtils";
 
 export default defineComponent({
@@ -162,11 +178,15 @@ export default defineComponent({
 		DragAndDrop,
 		FilePreview,
 		MediaGallery,
+		MoveFolderPickerDialog,
 	},
 	data: () => ({
 		loading: false,
 		rows: [],
 		selectedRows: [],
+		draggedItems: [],
+		dropTarget: null,
+		focusedRowIndex: -1,
 		columns: [
 			{
 				name: "thumbnail",
@@ -207,7 +227,7 @@ export default defineComponent({
 				align: "left",
 				field: "lastModified",
 				sortable: true,
-				sort: (a, b, rowA, rowB) => {
+				sort: (_a, _b, rowA, rowB) => {
 					return rowA.timestamp - rowB.timestamp;
 				},
 			},
@@ -218,7 +238,7 @@ export default defineComponent({
 				align: "left",
 				field: "size",
 				sortable: true,
-				sort: (a, b, rowA, rowB) => {
+				sort: (_a, _b, rowA, rowB) => {
 					return rowA.sizeRaw - rowB.sizeRaw;
 				},
 			},
@@ -292,21 +312,25 @@ export default defineComponent({
 		},
 	},
 	watch: {
-		selectedBucket(newVal) {
+		selectedBucket(_newVal) {
 			this.fetchFiles();
 		},
-		selectedFolder(newVal) {
+		selectedFolder(_newVal) {
 			this.fetchFiles();
 		},
 	},
 	methods: {
-		openRowClick: function (evt, row, index) {
+		openRowClick: function (evt, row, _index) {
+			evt.preventDefault();
+			if (row.type === "folder") {
+				this.openObject(row);
+			} else {
+				this.$bus.emit("openFileDetails", row);
+			}
+		},
+		openRowDlbClick: function (evt, row, _index) {
 			evt.preventDefault();
 			this.openObject(row);
-		},
-		openRowDlbClick: function (evt, row, index) {
-			evt.preventDefault();
-			this.$bus.emit("openFileDetails", row);
 		},
 		breadcrumbsClick: function (obj) {
 			this.$router.push({
@@ -314,7 +338,7 @@ export default defineComponent({
 				params: { bucket: this.selectedBucket, folder: encode(obj.path) },
 			});
 		},
-		rowClick: function (evt, row) {
+		rowClick: function (_evt, row) {
 			if (row.type === "folder") {
 				this.$router.push({
 					name: "files-folder",
@@ -432,18 +456,194 @@ export default defineComponent({
 			if (this.selectedRows.length === 1) {
 				this.$refs.options.deleteObject(this.selectedRows[0]);
 			} else {
-				this.q.notify({
-					type: "warning",
-					message:
-						"Bulk delete not yet implemented. Please delete items one at a time.",
-				});
+				this.$refs.options.bulkDeleteObjects(this.selectedRows);
 			}
+		},
+		handleBulkMove: function (items) {
+			this.$refs.moveDialog.open(items || this.selectedRows);
+		},
+		handleMoveComplete: function () {
+			this.clearSelection();
+			this.fetchFiles();
 		},
 		toggleSelectAll: function (val) {
 			this.allSelected = val;
 		},
 		clearSelection: function () {
 			this.selectedRows = [];
+		},
+		handleDragStart: function (event, row) {
+			if (this.mainStore.apiReadonly) {
+				event.preventDefault();
+				return;
+			}
+
+			if (this.selectedRows.length > 0 && this.selectedRows.includes(row)) {
+				this.draggedItems = [...this.selectedRows];
+			} else {
+				this.draggedItems = [row];
+			}
+
+			event.dataTransfer.effectAllowed = "move";
+			event.dataTransfer.setData(
+				"text/plain",
+				JSON.stringify(this.draggedItems.map((item) => item.key)),
+			);
+
+			const dragImage = document.createElement("div");
+			dragImage.textContent =
+				this.draggedItems.length === 1
+					? this.draggedItems[0].name
+					: `${this.draggedItems.length} items`;
+			dragImage.style.cssText =
+				"position: absolute; top: -1000px; padding: 8px; background: #1976d2; color: white; border-radius: 4px; font-size: 14px;";
+			document.body.appendChild(dragImage);
+			event.dataTransfer.setDragImage(dragImage, 0, 0);
+			setTimeout(() => document.body.removeChild(dragImage), 0);
+		},
+		handleDragOver: function (event, row) {
+			if (this.mainStore.apiReadonly || row.type !== "folder") {
+				return;
+			}
+
+			const draggedKeys = this.draggedItems.map((item) => item.key);
+			if (draggedKeys.includes(row.key)) {
+				return;
+			}
+
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "move";
+			this.dropTarget = row;
+		},
+		handleDragLeave: function (_event, row) {
+			if (this.dropTarget && this.dropTarget.key === row.key) {
+				this.dropTarget = null;
+			}
+		},
+		handleDrop: async function (event, targetRow) {
+			event.preventDefault();
+			this.dropTarget = null;
+
+			if (
+				this.mainStore.apiReadonly ||
+				targetRow.type !== "folder" ||
+				this.draggedItems.length === 0
+			) {
+				return;
+			}
+
+			const destinationFolder = targetRow.key;
+
+			const notif = this.q.notify({
+				group: false,
+				spinner: true,
+				message: `Moving ${this.draggedItems.length} item${this.draggedItems.length > 1 ? "s" : ""}...`,
+				caption: "0%",
+				timeout: 0,
+			});
+
+			try {
+				for (let i = 0; i < this.draggedItems.length; i++) {
+					const item = this.draggedItems[i];
+					const fileName = item.key.split("/").pop();
+					const newKey = `${destinationFolder}${fileName}`;
+
+					await apiHandler.renameObject(this.selectedBucket, item.key, newKey);
+
+					notif({
+						caption: `${Math.round(((i + 1) * 100) / this.draggedItems.length)}%`,
+					});
+				}
+
+				notif({
+					icon: "done",
+					spinner: false,
+					caption: "100%",
+					message: "Items moved successfully!",
+					timeout: 2500,
+				});
+
+				this.draggedItems = [];
+				this.clearSelection();
+				this.fetchFiles();
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to move items: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
+				});
+				this.draggedItems = [];
+			}
+		},
+		handleKeyDown: function (event) {
+			if (this.rows.length === 0) return;
+
+			switch (event.key) {
+				case "ArrowDown":
+					event.preventDefault();
+					if (this.focusedRowIndex < this.rows.length - 1) {
+						this.focusedRowIndex++;
+					}
+					break;
+				case "ArrowUp":
+					event.preventDefault();
+					if (this.focusedRowIndex > 0) {
+						this.focusedRowIndex--;
+					} else if (this.focusedRowIndex === -1 && this.rows.length > 0) {
+						this.focusedRowIndex = 0;
+					}
+					break;
+				case "Enter":
+					event.preventDefault();
+					if (
+						this.focusedRowIndex >= 0 &&
+						this.focusedRowIndex < this.rows.length
+					) {
+						this.openObject(this.rows[this.focusedRowIndex]);
+					}
+					break;
+				case " ":
+					event.preventDefault();
+					if (
+						this.focusedRowIndex >= 0 &&
+						this.focusedRowIndex < this.rows.length
+					) {
+						const row = this.rows[this.focusedRowIndex];
+						const index = this.selectedRows.findIndex((r) => r.key === row.key);
+						if (index >= 0) {
+							this.selectedRows.splice(index, 1);
+						} else {
+							this.selectedRows.push(row);
+						}
+					}
+					break;
+				case "Delete":
+				case "Backspace":
+					event.preventDefault();
+					if (this.selectedRows.length > 0) {
+						this.handleBulkDelete();
+					} else if (
+						this.focusedRowIndex >= 0 &&
+						this.focusedRowIndex < this.rows.length
+					) {
+						this.$refs.options.deleteObject(this.rows[this.focusedRowIndex]);
+					}
+					break;
+				case "Escape":
+					event.preventDefault();
+					this.clearSelection();
+					this.focusedRowIndex = -1;
+					break;
+				case "a":
+				case "A":
+					if (event.metaKey || event.ctrlKey) {
+						event.preventDefault();
+						this.selectedRows = [...this.rows];
+					}
+					break;
+			}
 		},
 		isMediaFile,
 		getThumbnailUrl,
@@ -459,6 +659,12 @@ export default defineComponent({
 		if (this.$route.params.file) {
 			this.openPreviewFromKey();
 		}
+
+		this.$nextTick(() => {
+			if (this.$refs.table?.$el) {
+				this.$refs.table.$el.focus();
+			}
+		});
 	},
 	beforeUnmount() {
 		this.$bus.off("fetchFiles");
@@ -491,5 +697,24 @@ export default defineComponent({
   width: 100%;
   justify-content: center;
 
+}
+
+.file-list td[draggable="true"] {
+  cursor: move;
+}
+
+.file-list td.drop-target {
+  background-color: rgba(25, 118, 210, 0.1);
+  border: 2px dashed #1976d2;
+  border-radius: 4px;
+}
+
+.file-list tr:has(td.keyboard-focused) {
+  outline: 2px solid #1976d2;
+  outline-offset: -2px;
+}
+
+.file-list table:focus {
+  outline: none;
 }
 </style>

@@ -8,3 +8,11 @@ assets = { directory = "node_modules/r2-explorer/dashboard", binding = "ASSETS",
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "bucket"
+
+# Cloudflare Access / Zero Trust Authentication
+# If you're using Cloudflare Zero Trust to protect your R2 Explorer,
+# uncomment and configure the line below with your team name.
+# This will enable the dashboard to display authentication info.
+# Docs: https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/
+# [vars]
+# CF_ACCESS_TEAM_NAME = "your-team-name"
