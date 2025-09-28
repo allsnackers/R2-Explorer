@@ -19,6 +19,7 @@ import {
 	PDFPageView,
 } from "pdfjs-dist/web/pdf_viewer.js";
 import resizeSensor from "pdfvuer/src/resize.vue";
+
 function isPDFDocumentLoadingTask(obj) {
 	return (
 		typeof obj === "object" &&
@@ -132,8 +133,8 @@ export default {
 			linkService: this.pdfLinkService,
 		});
 
-		let annotationLayer = undefined;
-		let textLayer = undefined;
+		let annotationLayer;
+		let textLayer;
 
 		if (this.annotation) {
 			annotationLayer = new DefaultAnnotationLayerFactory();

@@ -24,7 +24,7 @@
 
 <script>
 import { useQuasar } from "quasar";
-import { ROOT_FOLDER, apiHandler, decode, sleep } from "src/appUtils";
+import { apiHandler, decode, ROOT_FOLDER, sleep } from "src/appUtils";
 import { useMainStore } from "stores/main-store";
 
 export default {
