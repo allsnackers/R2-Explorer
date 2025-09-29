@@ -42,7 +42,7 @@
 </template>
 <script>
 import { useQuasar } from "quasar";
-import { decode, encode, ROOT_FOLDER } from "src/appUtils";
+import { buildFileAccessUrl, decode, encode, ROOT_FOLDER } from "src/appUtils";
 import { useMainStore } from "stores/main-store";
 
 export default {
@@ -102,8 +102,7 @@ export default {
 				this.mainStore.directLinkSettings.baseUrl &&
 				this.prop.row.type === "file"
 			) {
-				const baseUrl = this.mainStore.directLinkSettings.baseUrl;
-				url = `${baseUrl}/${this.selectedBucket}/${this.prop.row.key}`;
+				url = buildFileAccessUrl(this.selectedBucket, this.prop.row.key);
 			} else if (this.prop.row.type === "folder") {
 				url =
 					window.location.origin +

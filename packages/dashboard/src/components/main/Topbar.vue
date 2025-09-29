@@ -2,10 +2,12 @@
   <q-btn dense flat round icon="menu" @click="$emit('toggle')" />
 
   <q-toolbar-title style="overflow: unset" class="text-bold">
-    <q-avatar>
-      <img src="/logo-white.svg">
-    </q-avatar>
-    R2-Explorer
+    <router-link :to="homeRoute" class="topbar-home-link">
+      <q-avatar class="topbar-avatar">
+        <img src="/logo-white.svg">
+      </q-avatar>
+      <span>R2-Explorer</span>
+    </router-link>
   </q-toolbar-title>
   <q-space />
   <div v-if="mainStore.buckets.length > 1">
@@ -16,7 +18,8 @@
 <script>
 import BucketPicker from "components/main/BucketPicker.vue";
 import { useMainStore } from "stores/main-store";
-import { defineComponent } from "vue";
+import { computed, defineComponent } from "vue";
+import { useRoute } from "vue-router";
 
 export default defineComponent({
 	name: "TopBar",
@@ -24,7 +27,35 @@ export default defineComponent({
 	components: { BucketPicker },
 	setup() {
 		const mainStore = useMainStore();
-		return { mainStore };
+		const route = useRoute();
+
+		const homeRoute = computed(() => {
+			const bucket = route.params.bucket || mainStore.buckets?.[0]?.name;
+			if (bucket) {
+				return { name: "files-home", params: { bucket } };
+			}
+			return { name: "home" };
+		});
+
+		return { mainStore, homeRoute };
 	},
 });
 </script>
+
+<style scoped>
+.topbar-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.topbar-home-link:hover {
+  text-decoration: underline;
+}
+
+.topbar-avatar {
+  background: transparent;
+}
+</style>

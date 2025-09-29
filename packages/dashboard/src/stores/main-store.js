@@ -17,6 +17,7 @@ export const useMainStore = defineStore("main", {
 		directLinkSettings: {
 			enabled: false,
 			baseUrl: "",
+			singleBucketMode: false,
 		},
 	}),
 	getters: {
@@ -32,7 +33,12 @@ export const useMainStore = defineStore("main", {
 			const stored = localStorage.getItem("r2explorer-direct-link-settings");
 			if (stored) {
 				try {
-					this.directLinkSettings = JSON.parse(stored);
+					const parsed = JSON.parse(stored);
+					this.directLinkSettings = {
+						...this.directLinkSettings,
+						...parsed,
+						singleBucketMode: Boolean(parsed?.singleBucketMode),
+					};
 				} catch (e) {
 					console.error("Failed to load direct link settings:", e);
 				}

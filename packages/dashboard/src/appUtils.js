@@ -3,8 +3,55 @@ import { useMainStore } from "stores/main-store";
 
 export const ROOT_FOLDER = "IA=="; // IA== is a space
 
+const IMAGE_EXTENSIONS = [
+	"png",
+	"jpg",
+	"jpeg",
+	"webp",
+	"avif",
+	"gif",
+	"bmp",
+	"svg",
+];
+
+const VIDEO_EXTENSIONS = ["mp4", "ogg", "webm", "mov"];
+const AUDIO_EXTENSIONS = ["mp3", "wav", "flac", "aac", "ogg"];
+const MEDIA_EXTENSIONS = new Set([
+	...IMAGE_EXTENSIONS,
+	...VIDEO_EXTENSIONS,
+]);
+
+function sanitizeKeyForDirectUrl(key) {
+	if (key && key !== "/" && key.startsWith("/")) {
+		key = key.slice(1);
+	}
+	return key
+		.split("/")
+		.map((segment) => encodeURIComponent(segment))
+		.join("/");
+}
+
+function getFileIconAndColor(key) {
+	const ext = key.toLowerCase().split(".").pop();
+
+	if (IMAGE_EXTENSIONS.includes(ext)) {
+		return { icon: "image", color: "teal" };
+	}
+
+	if (VIDEO_EXTENSIONS.includes(ext)) {
+		return { icon: "movie", color: "deep-orange" };
+	}
+
+	if (AUDIO_EXTENSIONS.includes(ext)) {
+		return { icon: "music_note", color: "blue-grey" };
+	}
+
+	return { icon: "article", color: "grey" };
+}
+
 function mapFile(obj, prefix) {
 	const date = new Date(obj.uploaded);
+	const { icon, color } = getFileIconAndColor(obj.key);
 
 	return {
 		...obj,
@@ -16,8 +63,8 @@ function mapFile(obj, prefix) {
 		size: bytesToSize(obj.size),
 		sizeRaw: obj.size,
 		type: "file",
-		icon: "article",
-		color: "grey",
+		icon,
+		color,
 	};
 }
 
@@ -117,6 +164,38 @@ export const encode = (key) => {
 
 export const decode = (key) => {
 	return decodeURIComponent(escape(atob(key)));
+};
+
+export const buildFileAccessUrl = (
+	bucket,
+	key,
+	{ includeCacheVersion = false, cacheVersion } = {},
+) => {
+	const mainStore = useMainStore();
+	const directLinkSettings = mainStore.directLinkSettings || {};
+	const shouldAppendCache = includeCacheVersion === true;
+	const resolvedCacheVersion = shouldAppendCache
+		? cacheVersion ?? Date.now()
+		: undefined;
+
+	if (directLinkSettings.enabled && directLinkSettings.baseUrl) {
+		const segments = [directLinkSettings.baseUrl];
+		if (directLinkSettings.singleBucketMode !== true) {
+			segments.push(encodeURIComponent(bucket));
+		}
+		segments.push(sanitizeKeyForDirectUrl(key));
+		let url = segments.filter(Boolean).join("/");
+		if (shouldAppendCache) {
+			url += `${url.includes("?") ? "&" : "?"}v=${resolvedCacheVersion}`;
+		}
+		return url;
+	}
+
+	let url = `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(key)}`;
+	if (shouldAppendCache) {
+		url += `?v=${resolvedCacheVersion}`;
+	}
+	return url;
 };
 
 export const apiHandler = {
@@ -353,46 +432,22 @@ export const apiHandler = {
 
 export const isMediaFile = (filename) => {
 	const ext = filename.toLowerCase().split(".").pop();
-	const mediaExts = [
-		"png",
-		"jpg",
-		"jpeg",
-		"webp",
-		"avif",
-		"gif",
-		"bmp",
-		"svg",
-		"mp4",
-		"ogg",
-		"webm",
-		"mov",
-	];
-	return mediaExts.includes(ext);
+	return MEDIA_EXTENSIONS.has(ext);
 };
 
 export const getMediaType = (filename) => {
 	const ext = filename.toLowerCase().split(".").pop();
-	const imageExts = ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"];
-	const videoExts = ["mp4", "ogg", "webm", "mov"];
 
-	if (imageExts.includes(ext)) return "image";
-	if (videoExts.includes(ext)) return "video";
+	if (IMAGE_EXTENSIONS.includes(ext)) return "image";
+	if (VIDEO_EXTENSIONS.includes(ext)) return "video";
 	return null;
 };
 
 export const getThumbnailUrl = (file, bucket) => {
-	const mainStore = useMainStore();
 	const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
 
-	let baseUrl;
-	if (
-		mainStore.directLinkSettings.enabled &&
-		mainStore.directLinkSettings.baseUrl
-	) {
-		baseUrl = `${mainStore.directLinkSettings.baseUrl}/${bucket}/${file.key}`;
-	} else {
-		baseUrl = `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(file.key)}`;
-	}
-
-	return `${baseUrl}?v=${cacheVersion}`;
+	return buildFileAccessUrl(bucket, file.key, {
+		includeCacheVersion: true,
+		cacheVersion,
+	});
 };

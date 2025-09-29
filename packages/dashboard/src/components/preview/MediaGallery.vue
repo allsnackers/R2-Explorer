@@ -92,8 +92,7 @@
 </template>
 
 <script>
-import { encode } from "src/appUtils";
-import { useMainStore } from "stores/main-store";
+import { buildFileAccessUrl } from "src/appUtils";
 
 export default {
 	name: "MediaGallery",
@@ -187,13 +186,10 @@ export default {
 		},
 		getMediaUrl(file) {
 			const cacheVersion = file.customMetadata?.["cache-version"] || Date.now();
-			const { directLinkSettings, serverUrl } = this.mainStore;
-
-			if (directLinkSettings.enabled && directLinkSettings.baseUrl) {
-				return `${directLinkSettings.baseUrl}/${this.bucket}/${file.key}?v=${cacheVersion}`;
-			}
-
-			return `${serverUrl}/api/buckets/${this.bucket}/${encode(file.key)}?v=${cacheVersion}`;
+			return buildFileAccessUrl(this.bucket, file.key, {
+				includeCacheVersion: true,
+				cacheVersion,
+			});
 		},
 	},
 	watch: {
@@ -206,11 +202,6 @@ export default {
 	},
 	beforeUnmount() {
 		document.removeEventListener("keydown", this.handleKeydown);
-	},
-	setup() {
-		return {
-			mainStore: useMainStore(),
-		};
 	},
 };
 </script>
