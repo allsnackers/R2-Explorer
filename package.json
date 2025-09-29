@@ -15,7 +15,7 @@
 		"publish-npm": "pnpm run --filter r2-explorer publish-npm"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
+		"@biomejs/biome": "2.2.4",
 		"wrangler": "^4.20.1"
 	}
 }

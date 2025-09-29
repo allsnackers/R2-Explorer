@@ -36,7 +36,7 @@ export async function receiveEmail(
 	if (!bucket) {
 		// Bucket not set, default to first defined
 		for (const [key, value] of Object.entries(env)) {
-			// @ts-ignore
+			// @ts-expect-error
 			if (value.get && value.put) {
 				bucket = value;
 				break;

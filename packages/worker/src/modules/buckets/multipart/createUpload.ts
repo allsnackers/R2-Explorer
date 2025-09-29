@@ -34,14 +34,14 @@ export class CreateUpload extends OpenAPIRoute {
 
 		const key = decodeURIComponent(escape(atob(data.query.key)));
 
-		let customMetadata = undefined;
+		let customMetadata;
 		if (data.query.customMetadata) {
 			customMetadata = JSON.parse(
 				decodeURIComponent(escape(atob(data.query.customMetadata))),
 			);
 		}
 
-		let httpMetadata = undefined;
+		let httpMetadata;
 		if (data.query.httpMetadata) {
 			httpMetadata = JSON.parse(
 				decodeURIComponent(escape(atob(data.query.httpMetadata))),

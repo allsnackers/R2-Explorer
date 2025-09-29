@@ -130,14 +130,14 @@
 
 <script>
 import EmailViewer from "components/preview/EmailViewer.vue";
-import PdfViewer from "components/preview/PdfViewer.vue";
 import LogGz from "components/preview/logGz.vue";
+import PdfViewer from "components/preview/PdfViewer.vue";
 import { useQuasar } from "quasar";
 import {
-	ROOT_FOLDER,
 	apiHandler,
 	bytesToMegabytes,
 	decode,
+	ROOT_FOLDER,
 } from "src/appUtils";
 import { parseMarkdown } from "src/parsers/markdown";
 

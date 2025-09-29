@@ -1,40 +1,58 @@
 <template>
   <q-list style="min-width: 100px">
-    <q-item clickable v-close-popup @click="openObject">
+    <q-item clickable v-close-popup @click="openObject" v-if="!isBulkOperation">
       <q-item-section>Open</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="downloadObject" v-if="prop.row.type === 'file'">
+    <q-item clickable v-close-popup @click="downloadObject" v-if="!isBulkOperation && prop.row.type === 'file'">
       <q-item-section>Download</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="prop.row.type === 'file'">
+    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="!isBulkOperation && prop.row.type === 'file'">
       <q-item-section>Refresh Cache Version</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="prop.row.type === 'folder'">
+    <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="!isBulkOperation && prop.row.type === 'folder'">
       <q-item-section>Refresh Cache (Recursive)</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="renameObject" v-if="prop.row.type === 'file'">
+    <q-item clickable v-close-popup @click="renameObject" v-if="!isBulkOperation && prop.row.type === 'file'">
       <q-item-section>Rename</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="updateMetadataObject" v-if="prop.row.type === 'file'">
+    <q-item clickable v-close-popup @click="updateMetadataObject" v-if="!isBulkOperation && prop.row.type === 'file'">
       <q-item-section>Update Metadata</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="shareObject">
+    <q-item clickable v-close-popup @click="shareObject" v-if="!isBulkOperation">
       <q-item-section>Get sharable link</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="deleteObject">
+
+    <q-separator v-if="isBulkOperation" />
+    <q-item clickable v-close-popup @click="bulkMove" v-if="isBulkOperation">
+      <q-item-section>
+        <q-item-label>Move {{ bulkItemCount }} item{{ bulkItemCount > 1 ? 's' : '' }}...</q-item-label>
+      </q-item-section>
+    </q-item>
+    <q-item clickable v-close-popup @click="bulkDelete" v-if="isBulkOperation">
+      <q-item-section>
+        <q-item-label>Delete {{ bulkItemCount }} item{{ bulkItemCount > 1 ? 's' : '' }}...</q-item-label>
+      </q-item-section>
+    </q-item>
+
+    <q-separator v-if="!isBulkOperation" />
+    <q-item clickable v-close-popup @click="deleteObject" v-if="!isBulkOperation">
       <q-item-section>Delete</q-item-section>
     </q-item>
   </q-list>
 </template>
 <script>
 import { useQuasar } from "quasar";
-import { ROOT_FOLDER, decode, encode } from "src/appUtils";
+import { decode, encode, ROOT_FOLDER } from "src/appUtils";
 import { useMainStore } from "stores/main-store";
 
 export default {
 	name: "FileContextMenu",
 	props: {
 		prop: {},
+		selectedRows: {
+			type: Array,
+			default: () => [],
+		},
 	},
 	computed: {
 		selectedBucket: function () {
@@ -48,6 +66,16 @@ export default {
 				return decode(this.$route.params.folder);
 			}
 			return "";
+		},
+		isBulkOperation: function () {
+			return (
+				this.selectedRows.length > 1 ||
+				(this.selectedRows.length === 1 &&
+					this.selectedRows[0].key === this.prop.row.key)
+			);
+		},
+		bulkItemCount: function () {
+			return this.selectedRows.length;
 		},
 	},
 	methods: {
@@ -125,6 +153,12 @@ export default {
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
+		},
+		bulkMove: function () {
+			this.$emit("bulkMove", this.selectedRows);
+		},
+		bulkDelete: function () {
+			this.$emit("bulkDelete", this.selectedRows);
 		},
 	},
 	setup() {

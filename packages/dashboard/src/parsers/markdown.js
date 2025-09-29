@@ -6,14 +6,14 @@ const replaceRegex = (regex, replacement) => (str) =>
 // Regular expressions for Markdown (a bit strict, but they work)
 const codeBlockRegex = /((\n\t)(.*))+/g;
 const inlineCodeRegex = /(`)(.*?)\1/g;
-const imageRegex = /!\[([^\[]+)\]\(([^\)]+)\)/g;
-const linkRegex = /\[([^\[]+)\]\(([^\)]+)\)/g;
+const imageRegex = /!\[([^[]+)\]\(([^)]+)\)/g;
+const linkRegex = /\[([^[]+)\]\(([^)]+)\)/g;
 const headingRegex = /\n(#+\s*)(.*)/g;
 const boldItalicsRegex = /(\*{1,2})(.*?)\1/g;
-const strikethroughRegex = /(\~\~)(.*?)\1/g;
-const blockquoteRegex = /\n(&gt;|\>)(.*)/g;
-const horizontalRuleRegex = /\n((\-{3,})|(={3,}))/g;
-const unorderedListRegex = /(\n\s*(\-|\+)\s.*)+/g;
+const strikethroughRegex = /(~~)(.*?)\1/g;
+const blockquoteRegex = /\n(&gt;|>)(.*)/g;
+const horizontalRuleRegex = /\n((-{3,})|(={3,}))/g;
+const unorderedListRegex = /(\n\s*(-|\+)\s.*)+/g;
 const orderedListRegex = /(\n\s*([0-9]+\.)\s.*)+/g;
 const paragraphRegex =
 	/\n+(?!<pre>)(?!<h)(?!<ul>)(?!<blockquote)(?!<hr)(?!\t)([^\n]+)\n/g;
