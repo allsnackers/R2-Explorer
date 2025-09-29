@@ -59,19 +59,19 @@
             </td>
           </template>
 
-          <template v-slot:body-cell-name="prop">
-            <td
-              class="name-cell row items-center"
-              :draggable="!mainStore.apiReadonly"
-              @dragstart="handleDragStart($event, prop.row)"
-              @dragover="handleDragOver($event, prop.row)"
-              @dragleave="handleDragLeave($event, prop.row)"
-              @drop="handleDrop($event, prop.row)"
-              :class="{
-                'drop-target': dropTarget && dropTarget.key === prop.row.key,
-                'keyboard-focused': focusedRowIndex === prop.rowIndex
-              }"
-            >
+	          <template v-slot:body-cell-name="prop">
+	            <td
+	              class="name-cell"
+	              :draggable="!mainStore.apiReadonly"
+	              @dragstart="handleDragStart($event, prop.row)"
+	              @dragover="handleDragOver($event, prop.row)"
+	              @dragleave="handleDragLeave($event, prop.row)"
+	              @drop="handleDrop($event, prop.row)"
+	              :class="{
+	                'drop-target': dropTarget && dropTarget.key === prop.row.key,
+	                'keyboard-focused': focusedRowIndex === prop.rowIndex
+	              }"
+	            >
               <q-icon :name="prop.row.icon" size="sm" :color="prop.row.color" class="q-mr-xs" />
               {{prop.row.name}}
             </td>
@@ -751,11 +751,14 @@ export default defineComponent({
   outline: none;
 }
 
-.name-cell {
-  gap: 8px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+.file-list td.name-cell {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
 }
 
 .name-cell .q-icon {
