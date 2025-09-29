@@ -729,7 +729,14 @@ export default defineComponent({
 
 .file-list td.thumbnail-cell {
   width: 72px;
+  height: 60px;
   text-align: center;
+}
+
+.thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .file-list td[draggable="true"] {
@@ -756,6 +763,7 @@ export default defineComponent({
 	align-items: center;
 	gap: 8px;
 	margin: 0;
+	min-height: 60px;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	overflow: hidden;
