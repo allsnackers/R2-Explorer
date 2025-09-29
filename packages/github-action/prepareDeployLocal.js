@@ -89,8 +89,9 @@ if (!fs.existsSync(srcDir)) {
     fs.mkdirSync(srcDir, { recursive: true });
 }
 
+const relativeWorkerEntry = path.posix.join("..", "..", "worker", "dist", "index.mjs");
 const indexContent = `
-import { R2Explorer } from "../../packages/worker/dist/index.mjs";
+import { R2Explorer } from "${relativeWorkerEntry}";
 
 export default R2Explorer(${R2EXPLORER_CONFIG});
 `;
