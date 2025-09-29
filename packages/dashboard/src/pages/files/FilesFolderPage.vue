@@ -20,8 +20,8 @@
           table-class="file-list"
           selection="multiple"
           v-model:selected="selectedRows"
-          @row-dblclick="openRowClick"
-          @row-click="openRowDlbClick"
+          @row-dblclick="handleRowDoubleClick"
+          @row-click="handleRowClick"
           @keydown="handleKeyDown"
           tabindex="0"
         >
@@ -61,8 +61,7 @@
 
           <template v-slot:body-cell-name="prop">
             <td
-              class="flex"
-              style="align-items: center"
+              class="name-cell row items-center"
               :draggable="!mainStore.apiReadonly"
               @dragstart="handleDragStart($event, prop.row)"
               @dragover="handleDragOver($event, prop.row)"
@@ -320,16 +319,33 @@ export default defineComponent({
 		},
 	},
 	methods: {
-		openRowClick: function (evt, row, _index) {
-			evt.preventDefault();
-			if (row.type === "folder") {
+		handleRowClick: function (event, row, index) {
+			this.focusedRowIndex = index;
+
+			const interactiveSelectors = [
+				".file-thumbnail",
+				".q-btn",
+				".q-menu",
+				".q-checkbox",
+				".q-toggle",
+			];
+			const clickedInteractive = interactiveSelectors.some((selector) =>
+				event.target.closest(selector),
+			);
+			if (clickedInteractive) {
+				return;
+			}
+
+			const hasModifier =
+				event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+			if (row.type === "folder" && !hasModifier) {
+				this.clearSelection();
 				this.openObject(row);
-			} else {
-				this.$bus.emit("openFileDetails", row);
 			}
 		},
-		openRowDlbClick: function (evt, row, _index) {
-			evt.preventDefault();
+		handleRowDoubleClick: function (event, row, index) {
+			event.preventDefault();
+			this.focusedRowIndex = index;
 			this.openObject(row);
 		},
 		breadcrumbsClick: function (obj) {
@@ -337,17 +353,6 @@ export default defineComponent({
 				name: "files-folder",
 				params: { bucket: this.selectedBucket, folder: encode(obj.path) },
 			});
-		},
-		rowClick: function (_evt, row) {
-			if (row.type === "folder") {
-				this.$router.push({
-					name: "files-folder",
-					params: { bucket: this.selectedBucket, folder: encode(row.key) },
-				});
-			} else {
-				// console.log(row)
-				this.$refs.preview.openFile(row);
-			}
 		},
 		openObject: function (row) {
 			if (row.type === "folder") {
@@ -679,24 +684,38 @@ export default defineComponent({
 </script>
 
 <style>
-.file-list table , .file-list tbody , .file-list thead {
+.file-list table {
   width: 100%;
-  display: block;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-
-.file-list td:first-of-type, .file-list th:first-of-type {
-  overflow-x: hidden;
-  white-space: nowrap;
-  flex-grow: 1;
-  text-overflow: ellipsis;
+.file-list thead tr,
+.file-list tbody tr {
+  display: table-row;
 }
 
-.file-list tr {
-  display: flex;
-  width: 100%;
-  justify-content: center;
+.file-list tbody tr {
+  transition: background-color 0.15s ease;
+}
 
+.file-list tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.file-list td,
+.file-list th {
+  vertical-align: middle;
+}
+
+.file-list td:first-of-type,
+.file-list th:first-of-type {
+  width: 48px;
+}
+
+.file-list td.thumbnail-cell {
+  width: 72px;
+  text-align: center;
 }
 
 .file-list td[draggable="true"] {
@@ -704,17 +723,28 @@ export default defineComponent({
 }
 
 .file-list td.drop-target {
-  background-color: rgba(25, 118, 210, 0.1);
-  border: 2px dashed #1976d2;
+  background-color: rgba(25, 118, 210, 0.08);
+  box-shadow: inset 0 0 0 2px #1976d2;
   border-radius: 4px;
 }
 
 .file-list tr:has(td.keyboard-focused) {
   outline: 2px solid #1976d2;
-  outline-offset: -2px;
+  outline-offset: -1px;
 }
 
 .file-list table:focus {
   outline: none;
+}
+
+.name-cell {
+  gap: 8px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.name-cell .q-icon {
+  flex-shrink: 0;
 }
 </style>
