@@ -344,6 +344,20 @@ export default defineComponent({
 			}
 		},
 		handleRowDoubleClick: function (event, row, index) {
+			const interactiveSelectors = [
+				".file-thumbnail",
+				".q-btn",
+				".q-menu",
+				".q-checkbox",
+				".q-toggle",
+			];
+			if (
+				event.target instanceof Element &&
+				interactiveSelectors.some((selector) => event.target.closest(selector))
+			) {
+				return;
+			}
+
 			event.preventDefault();
 			this.focusedRowIndex = index;
 			this.openObject(row);
