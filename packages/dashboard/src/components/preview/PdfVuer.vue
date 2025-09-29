@@ -9,7 +9,6 @@
 </template>
 <script>
 import { getDocument } from "pdfjs-dist";
-import PdfjsWorker from "pdfjs-dist/build/pdf.worker.entry";
 import {
 	DefaultAnnotationLayerFactory,
 	DefaultTextLayerFactory,

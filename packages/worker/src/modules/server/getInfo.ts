@@ -10,7 +10,7 @@ export class GetInfo extends OpenAPIRoute {
 	};
 
 	async handle(c: AppContext) {
-		const { basicAuth, ...config } = c.get("config");
+		const { basicAuth: _basicAuth, ...config } = c.get("config");
 
 		const buckets = [];
 

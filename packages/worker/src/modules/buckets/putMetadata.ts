@@ -43,7 +43,7 @@ export class PutMetadata extends OpenAPIRoute {
 		let filePath;
 		try {
 			filePath = decodeURIComponent(escape(atob(data.params.key)));
-		} catch (e) {
+		} catch (_e) {
 			filePath = decodeURIComponent(
 				escape(atob(decodeURIComponent(data.params.key))),
 			);

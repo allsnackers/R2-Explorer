@@ -113,9 +113,17 @@ export default defineComponent({
 			this.$router.push({ name: "settings" });
 		},
 		changeApp: function (app) {
+			const bucket = this.selectedBucket;
+			if (!bucket) {
+				this.$q.notify({
+					message: "No bucket available yet. Please configure a bucket first.",
+					type: "warning",
+				});
+				return;
+			}
 			this.$router.push({
 				name: `${app}-home`,
-				params: { bucket: this.selectedBucket },
+				params: { bucket },
 			});
 		},
 		isUpdateAvailable: (currentVersion, latestVersion) => {
@@ -139,7 +147,9 @@ export default defineComponent({
 	},
 	computed: {
 		selectedBucket: function () {
-			return this.$route.params.bucket;
+			return (
+				this.$route.params.bucket || this.mainStore.buckets?.[0]?.name || null
+			);
 		},
 		selectedApp: function () {
 			return this.$route.name.split("-")[0];

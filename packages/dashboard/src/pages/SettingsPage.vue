@@ -38,10 +38,22 @@
             </template>
           </q-input>
 
+          <q-toggle
+            v-model="settings.singleBucketMode"
+            label="Single Bucket Mode"
+            color="primary"
+            class="q-mt-md"
+            @update:model-value="saveSettings"
+          />
+
+          <div class="q-mt-xs text-caption text-grey-7">
+            When enabled, generated direct links will omit the bucket name from the path.
+          </div>
+
           <div v-if="settings.baseUrl" class="q-mt-md">
             <div class="text-caption text-grey-7">Preview Example:</div>
             <div class="q-mt-xs q-pa-sm bg-grey-2 rounded" style="word-break: break-all; font-family: monospace; font-size: 12px;">
-              {{ settings.baseUrl }}/{{ exampleBucket }}/path/to/file.png
+              {{ settings.baseUrl }}/{{ directLinkPathExample }}
             </div>
           </div>
         </q-card-section>
@@ -154,13 +166,26 @@ export default defineComponent({
 		settings: {
 			enabled: false,
 			baseUrl: "",
+			singleBucketMode: false,
 		},
 		selectedBucketForRefresh: null,
 		refreshing: false,
 	}),
 	computed: {
 		exampleBucket() {
-			return this.$route.params.bucket || "my-bucket";
+			return (
+				this.$route.params.bucket ||
+				this.mainStore.buckets[0]?.name ||
+				"my-bucket"
+			);
+		},
+		directLinkPathExample() {
+			const segments = [];
+			if (!this.settings.singleBucketMode) {
+				segments.push(this.exampleBucket);
+			}
+			segments.push("path/to/file.png");
+			return segments.join("/");
 		},
 		bucketOptions() {
 			return this.mainStore.buckets.map((b) => b.name);
@@ -171,7 +196,12 @@ export default defineComponent({
 			const stored = localStorage.getItem("r2explorer-direct-link-settings");
 			if (stored) {
 				try {
-					this.settings = JSON.parse(stored);
+					const parsed = JSON.parse(stored);
+					this.settings = {
+						...this.settings,
+						...parsed,
+						singleBucketMode: Boolean(parsed?.singleBucketMode),
+					};
 				} catch (e) {
 					console.error("Failed to load settings:", e);
 				}
@@ -188,6 +218,7 @@ export default defineComponent({
 
 			const cleanedBaseUrl = this.settings.baseUrl.replace(/\/+$/, "");
 			this.settings.baseUrl = cleanedBaseUrl;
+			this.settings.singleBucketMode = Boolean(this.settings.singleBucketMode);
 
 			localStorage.setItem(
 				"r2explorer-direct-link-settings",
@@ -206,6 +237,7 @@ export default defineComponent({
 			this.settings = {
 				enabled: false,
 				baseUrl: "",
+				singleBucketMode: false,
 			};
 			this.saveSettings();
 		},
