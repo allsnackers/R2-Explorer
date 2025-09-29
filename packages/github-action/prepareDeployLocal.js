@@ -9,16 +9,45 @@ const R2EXPLORER_CONFIG = process.env.R2EXPLORER_CONFIG;
 const R2EXPLORER_DOMAIN = process.env.R2EXPLORER_DOMAIN;
 const CF_API_TOKEN = process.env.CF_API_TOKEN;
 
-let baseDir = __dirname;
+// BEFORE:
+// let baseDir = __dirname;
+// if (WORKERS_CI === "1") {
+//     baseDir = process.env.PWD;
+//     R2EXPLORER_WORKER_NAME = R2EXPLORER_WORKER_NAME || "r2-explorer";
+// } else {
+//     if (!CF_API_TOKEN) {
+//         console.error("CF_API_TOKEN variable is required to continue!");
+//         process.exit(1);
+//     }
+// }
+
+// AFTER:
+const actionDir = __dirname;
+const repoRoot =
+    WORKERS_CI === "1" && process.env.PWD
+        ? process.env.PWD
+        : path.resolve(actionDir, "..", "..");
+
 if (WORKERS_CI === "1") {
-	baseDir = process.env.PWD;
-	R2EXPLORER_WORKER_NAME = R2EXPLORER_WORKER_NAME || "r2-explorer";
+    R2EXPLORER_WORKER_NAME = R2EXPLORER_WORKER_NAME || "r2-explorer";
 } else {
-	if (!CF_API_TOKEN) {
-		console.error("CF_API_TOKEN variable is required to continue!");
-		process.exit(1);
-	}
+    if (!CF_API_TOKEN) {
+        console.error("CF_API_TOKEN variable is required to continue!");
+        process.exit(1);
+    }
 }
+
+console.log(wranglerConfig);
+fs.writeFileSync(path.join(actionDir, "wrangler.toml"), wranglerConfig);
+
+if (!fs.existsSync(path.join(actionDir, "src"))) {
+    fs.mkdirSync(path.join(actionDir, "src"));
+}
+
+fs.writeFileSync(path.join(actionDir, "src/index.ts"), indexContent);
+
+const workerDistPath = path.join(repoRoot, "packages/worker/dist");
+const dashboardDistPath = path.join(repoRoot, "packages/dashboard/dist/spa");
 
 if (!R2EXPLORER_WORKER_NAME) {
 	console.error("R2EXPLORER_WORKER_NAME variable is required to continue!");
@@ -58,14 +87,20 @@ workers_dev = true
 
 // Add R2 bucket bindings
 for (const bucket of R2EXPLORER_BUCKETS.split("\n")) {
-	const split = bucket.trim().split(":");
-	if (split.length !== 2) {
-		console.error("R2EXPLORER_BUCKETS is not set correctly!");
-		console.error(
-			`"${split}" is not in the correct format => ALIAS:BUCKET_NAME`,
-		);
-		process.exit(1);
-	}
+    const trimmed = bucket.trim();
+    if (!trimmed) {
+        continue;
+    }
+    const split = trimmed.split(":");
+    if (split.length !== 2) {
+        console.error("R2EXPLORER_BUCKETS is not set correctly!");
+        console.error(
+            `"${split}" is not in the correct format => ALIAS:BUCKET_NAME`,
+        );
+        process.exit(1);
+    }
+    // …rest of logic for a valid alias:bucket_name pair
+}
 
 	wranglerConfig += `
 [[r2_buckets]]
