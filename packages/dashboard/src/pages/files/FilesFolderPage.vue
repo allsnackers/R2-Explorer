@@ -739,6 +739,13 @@ export default defineComponent({
   object-fit: contain;
 }
 
+.file-thumbnail {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
 .file-list td[draggable="true"] {
   cursor: move;
 }
