@@ -5,20 +5,9 @@
 		"clientKind": "git",
 		"useIgnoreFile": false
 	},
-	"files": {
-		"ignoreUnknown": false,
-		"include": ["**"]
-	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab"
-	},
-	"assists": {
-		"actions": {
-			"source": {
-				"organizeImports": "on"
-			}
-		}
 	},
 	"linter": {
 		"enabled": true,
