@@ -17,16 +17,24 @@ jobs:
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
-      - name: Setup R2-Explorer
+      - name: Install pnpm
+        run: npm install -g pnpm
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build dashboard
+        run: pnpm build-dashboard
+      - name: Build worker
+        run: pnpm build-worker
+      - name: Setup R2-Explorer for deployment
         env:
           R2EXPLORER_WORKER_NAME: ${{ vars.R2EXPLORER_WORKER_NAME }}
           R2EXPLORER_CONFIG: ${{ vars.R2EXPLORER_CONFIG }}
           R2EXPLORER_BUCKETS: ${{ vars.R2EXPLORER_BUCKETS }}
           R2EXPLORER_DOMAIN: ${{ vars.R2EXPLORER_DOMAIN }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: node packages/github-action/prepareDeploy.js
-      - name: Get latest version
-        run: cd packages/github-action && npm install && npm install --save r2-explorer@latest
+        run: node packages/github-action/prepareDeployLocal.js
+      - name: Install wrangler in github-action package
+        run: cd packages/github-action && npm install wrangler@latest
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
         with:
