@@ -728,24 +728,31 @@ export default defineComponent({
 }
 
 .file-list td.thumbnail-cell {
-  width: 72px;
-  height: 60px;
-  text-align: center;
-  padding: 0;
-}
-
-.thumbnail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+	width: 72px;
+	height: 60px;
+	padding: 0 0 0 8px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
 }
 
 .file-thumbnail {
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  margin: 0;
-  background: white;
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border-radius: 6px;
+	background: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.thumbnail-image {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
 }
 
 .file-list td[draggable="true"] {
