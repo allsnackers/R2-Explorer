@@ -49,7 +49,7 @@ export class ListObjects extends OpenAPIRoute {
 			cursor: data.query.cursor,
 			startAfter: data.query.startAfter,
 			delimiter: data.query.delimiter ? data.query.delimiter : "",
-			// @ts-ignore
+			// @ts-expect-error
 			include: data.query.include,
 		});
 	}
