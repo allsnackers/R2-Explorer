@@ -699,9 +699,10 @@ export default defineComponent({
 
 <style>
 .file-list table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	table-layout: fixed;
 }
 
 .file-list thead tr,
@@ -710,7 +711,22 @@ export default defineComponent({
 }
 
 .file-list tbody tr {
-  transition: background-color 0.15s ease;
+	position: relative;
+	transition: background-color 0.15s ease;
+}
+
+.file-list tbody tr::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+	pointer-events: none;
+}
+
+.file-list tbody tr:last-of-type::after {
+	border-bottom: none;
 }
 
 .file-list tbody tr:hover {
@@ -719,7 +735,8 @@ export default defineComponent({
 
 .file-list td,
 .file-list th {
-  vertical-align: middle;
+	vertical-align: middle;
+	padding: 0 16px;
 }
 
 .file-list td:first-of-type,
@@ -730,7 +747,7 @@ export default defineComponent({
 .file-list td.thumbnail-cell {
 	width: 72px;
 	height: 60px;
-	padding: 0 0 0 8px;
+	padding: 0 0 0 12px;
 	display: flex;
 	align-items: center;
 	justify-content: flex-start;
@@ -747,6 +764,7 @@ export default defineComponent({
 	background: #fff;
 	border: 1px solid rgba(0, 0, 0, 0.08);
 	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+	flex-shrink: 0;
 }
 
 .thumbnail-image {
@@ -775,15 +793,15 @@ export default defineComponent({
 }
 
 .file-list td.name-cell {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 0;
-	min-height: 60px;
-	padding: 0;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-height: 60px;
+  padding: 0 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .name-cell .q-icon {
