@@ -7,13 +7,13 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**"]
+		"include": ["**"]
 	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab"
 	},
-	"assist": {
+	"assists": {
 		"actions": {
 			"source": {
 				"organizeImports": "on"
