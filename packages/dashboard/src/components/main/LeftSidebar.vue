@@ -148,9 +148,7 @@ export default defineComponent({
 	computed: {
 		selectedBucket: function () {
 			return (
-				this.$route.params.bucket ||
-				this.mainStore.buckets?.[0]?.name ||
-				null
+				this.$route.params.bucket || this.mainStore.buckets?.[0]?.name || null
 			);
 		},
 		selectedApp: function () {

@@ -59,7 +59,7 @@ export default {
 		openFoldersUploader() {
 			this.$refs.foldersUploader.click();
 		},
-		dragover(event) {
+		dragover(_event) {
 			if (this.mainStore.apiReadonly || this.isHover === true) {
 				return;
 			}
@@ -109,7 +109,6 @@ export default {
 			this.uploadFiles(folders);
 		},
 		async uploadFiles(folders) {
-			let totalFiles = 0;
 			let totalSize = 0;
 			const filenames = [];
 
@@ -124,8 +123,6 @@ export default {
 
 					await apiHandler.createFolder(folderKey, this.selectedBucket);
 				}
-
-				totalFiles += files.length;
 
 				for (const file of files) {
 					filenames.push(file.name);
@@ -150,7 +147,7 @@ export default {
 			for (const [folder, files] of Object.entries(folders)) {
 				notif({
 					message: `Uploading files ${uploadCount + 1}/${filenames.length}...`,
-					caption: `${Number.parseInt(((uploadCount + 1) * 100) / filenames.length)}%`, // +1 because still needs to delete the folder
+					caption: `${Number.parseInt(((uploadCount + 1) * 100) / filenames.length, 10)}%`, // +1 because still needs to delete the folder
 				});
 
 				let targetFolder = this.selectedFolder + folder;
@@ -194,7 +191,7 @@ export default {
 									(progressEvent) => {
 										//console.log((start + progressEvent.loaded) * 100 / file.size)
 										notif({
-											caption: `${Number.parseInt(((uploadSize + start + progressEvent.loaded) * 100) / totalSize)}%`,
+											caption: `${Number.parseInt(((uploadSize + start + progressEvent.loaded) * 100) / totalSize, 10)}%`,
 										});
 										// self.$store.dispatch('setUploadProgress', {
 										//   filename: file.name,
@@ -222,7 +219,7 @@ export default {
 								(progressEvent) => {
 									//console.log(progressEvent.loaded * 100 / file.size)
 									notif({
-										caption: `${Number.parseInt(((uploadSize + progressEvent.loaded) * 100) / totalSize)}%`,
+										caption: `${Number.parseInt(((uploadSize + progressEvent.loaded) * 100) / totalSize, 10)}%`,
 									});
 									// self.$store.dispatch('setUploadProgress', {
 									//   filename: file.name,
@@ -256,7 +253,7 @@ export default {
 
 			// Root files are handled outside
 			if (item.isFile && depth > 0) {
-				const filePromise = new Promise((resolve, reject) => {
+				const filePromise = new Promise((resolve, _reject) => {
 					item.file((file) => {
 						folders[path].push(file);
 
@@ -274,7 +271,7 @@ export default {
 				// Get folder contents
 				const dirReader = item.createReader();
 
-				const promise = new Promise((resolve, reject) => {
+				const promise = new Promise((resolve, _reject) => {
 					dirReader.readEntries(async (entries) => {
 						for (let i = 0; i < entries.length; i++) {
 							await this.traverseFileTree(

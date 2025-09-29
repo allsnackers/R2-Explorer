@@ -133,12 +133,7 @@ import EmailViewer from "components/preview/EmailViewer.vue";
 import LogGz from "components/preview/logGz.vue";
 import PdfViewer from "components/preview/PdfViewer.vue";
 import { useQuasar } from "quasar";
-import {
-	apiHandler,
-	bytesToMegabytes,
-	decode,
-	ROOT_FOLDER,
-} from "src/appUtils";
+import { apiHandler, bytesToMegabytes, ROOT_FOLDER } from "src/appUtils";
 import { parseMarkdown } from "src/parsers/markdown";
 
 export default {
@@ -161,16 +156,7 @@ export default {
 
 		previewConfig: [
 			{
-				extensions: [
-					"png",
-					"jpg",
-					"jpeg",
-					"webp",
-					"avif",
-					"gif",
-					"bmp",
-					"svg",
-				],
+				extensions: ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"],
 				type: "image",
 				downloadType: "objectUrl",
 			},
@@ -389,7 +375,7 @@ export default {
 				try {
 					JSON.parse(content);
 					return true;
-				} catch (e) {
+				} catch (_e) {
 					return false;
 				}
 			}
@@ -426,7 +412,7 @@ export default {
 				this.selectedBucket,
 				(progressEvent) => {
 					notif({
-						caption: `${Number.parseInt((progressEvent.loaded * 100) / newFile.size)}%`,
+						caption: `${Number.parseInt((progressEvent.loaded * 100) / newFile.size, 10)}%`,
 					});
 				},
 			);

@@ -16,10 +16,7 @@ const IMAGE_EXTENSIONS = [
 
 const VIDEO_EXTENSIONS = ["mp4", "ogg", "webm", "mov"];
 const AUDIO_EXTENSIONS = ["mp3", "wav", "flac", "aac", "ogg"];
-const MEDIA_EXTENSIONS = new Set([
-	...IMAGE_EXTENSIONS,
-	...VIDEO_EXTENSIONS,
-]);
+const MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS]);
 
 function sanitizeKeyForDirectUrl(key) {
 	if (key && key !== "/" && key.startsWith("/")) {
@@ -107,7 +104,7 @@ export async function retryWithBackoff(
 }
 
 export const timeSince = (date) => {
-	const seconds = Math.floor((new Date() - date) / 1000);
+	const seconds = Math.floor((Date.now() - date) / 1000);
 
 	let interval = seconds / 31536000;
 	let calc;
@@ -146,7 +143,7 @@ export const timeSince = (date) => {
 export const bytesToSize = (bytes) => {
 	const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
 	if (bytes === 0) return "0 Byte";
-	const i = Number.parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+	const i = Number.parseInt(Math.floor(Math.log(bytes) / Math.log(1024)), 10);
 	return `${Math.round(bytes / 1024 ** i, 2)} ${sizes[i]}`;
 };
 
@@ -175,7 +172,7 @@ export const buildFileAccessUrl = (
 	const directLinkSettings = mainStore.directLinkSettings || {};
 	const shouldAppendCache = includeCacheVersion === true;
 	const resolvedCacheVersion = shouldAppendCache
-		? cacheVersion ?? Date.now()
+		? (cacheVersion ?? Date.now())
 		: undefined;
 
 	if (directLinkSettings.enabled && directLinkSettings.baseUrl) {
@@ -282,7 +279,7 @@ export const apiHandler = {
 			},
 		});
 	},
-	multipartComplete: (file, key, bucket, parts, uploadId) => {
+	multipartComplete: (_file, key, bucket, parts, uploadId) => {
 		return api.post(`/buckets/${bucket}/multipart/complete`, {
 			key: encode(key),
 			uploadId,
