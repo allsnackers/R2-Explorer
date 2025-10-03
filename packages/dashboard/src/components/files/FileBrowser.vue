@@ -674,8 +674,19 @@ export default defineComponent({
 		};
 
 		const handleImageError = (event, item) => {
-			// Replace broken image with icon
-			console.warn('Failed to load thumbnail for:', item.name, 'URL:', event.target.src);
+			// Log detailed error information
+			console.group('🖼️ Failed to load thumbnail');
+			console.warn('File:', item.name);
+			console.warn('URL:', event.target.src);
+			console.warn('Item key:', item.key);
+			console.warn('Bucket:', props.bucket);
+			
+			// Check for network or CORS issues
+			if (event.target.complete === false) {
+				console.warn('Image failed to complete loading - possible network or CORS issue');
+			}
+			
+			console.groupEnd();
 			
 			// Hide the broken image
 			event.target.style.display = "none";
