@@ -91,6 +91,7 @@
                   class="file-thumbnail-img"
                   loading="lazy"
                   @error="handleImageError($event, item)"
+                  @load="handleImageLoad($event, item)"
                 />
                 <q-icon
                   v-else
@@ -196,6 +197,7 @@
                       class="file-list-thumbnail"
                       loading="lazy"
                       @error="handleImageError($event, item)"
+                      @load="handleImageLoad($event, item)"
                     />
                     <q-icon
                       v-else
@@ -530,6 +532,7 @@ export default defineComponent({
 			focusedIndex.value = index;
 
 			if (event.ctrlKey || event.metaKey) {
+				// Multi-select with Ctrl/Cmd
 				const idx = selectedItems.value.findIndex((i) => i.key === item.key);
 				if (idx >= 0) {
 					selectedItems.value.splice(idx, 1);
@@ -551,11 +554,21 @@ export default defineComponent({
 						selectedItems.value.push(item);
 					}
 				}
-			} else if (!selectionMode.value && selectedItems.value.length === 0) {
-				// Normal click - navigate to folder
-				if (item.type === "folder") {
-					openItem(item);
+			} else if (selectionMode.value) {
+				// In selection mode, toggle selection
+				const idx = selectedItems.value.findIndex((i) => i.key === item.key);
+				if (idx >= 0) {
+					selectedItems.value.splice(idx, 1);
+				} else {
+					selectedItems.value.push(item);
 				}
+			} else if (selectedItems.value.length > 0) {
+				// If items are selected, clear selection and open item
+				clearSelection();
+				openItem(item);
+			} else {
+				// Normal click - open item (folder or file)
+				openItem(item);
 			}
 		};
 
@@ -662,10 +675,38 @@ export default defineComponent({
 
 		const handleImageError = (event, item) => {
 			// Replace broken image with icon
+			console.warn('Failed to load thumbnail for:', item.name, 'URL:', event.target.src);
+			
+			// Hide the broken image
 			event.target.style.display = "none";
-			const icon = document.createElement("div");
-			icon.innerHTML = `<q-icon name="${item.icon}" color="${item.color}" size="48px" />`;
-			event.target.parentElement.appendChild(icon);
+			
+			// Check if we already added a fallback icon to avoid duplicates
+			const parent = event.target.parentElement;
+			if (parent.querySelector('.fallback-icon')) {
+				return;
+			}
+			
+			// Create a fallback icon element
+			const iconWrapper = document.createElement("div");
+			iconWrapper.className = "fallback-icon";
+			iconWrapper.style.cssText = "display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;";
+			
+			const icon = document.createElement("i");
+			icon.className = `q-icon notranslate material-icons text-${item.color}`;
+			icon.style.fontSize = "48px";
+			icon.setAttribute("aria-hidden", "true");
+			icon.setAttribute("role", "img");
+			icon.textContent = item.icon;
+			
+			iconWrapper.appendChild(icon);
+			parent.appendChild(iconWrapper);
+		};
+
+		const handleImageLoad = (_event, item) => {
+			// Log successful loads for debugging
+			if (import.meta.env.DEV) {
+				console.log('Successfully loaded thumbnail for:', item.name);
+			}
 		};
 
 		const getItemCount = (_folder) => {
@@ -1049,6 +1090,7 @@ export default defineComponent({
 			downloadItem,
 			onBreadcrumbClick,
 			handleImageError,
+			handleImageLoad,
 			getItemCount,
 			showContextMenu,
 			handleDragStart,
@@ -1251,7 +1293,7 @@ export default defineComponent({
 .file-thumbnail-img {
   max-width: 100%;
   max-height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 4px;
 }
 
@@ -1393,7 +1435,7 @@ export default defineComponent({
 .file-list-thumbnail {
   width: 32px;
   height: 32px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 4px;
   flex-shrink: 0;
 }
