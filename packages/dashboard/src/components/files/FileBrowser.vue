@@ -356,693 +356,726 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useQuasar } from 'quasar'
-import { useMainStore } from 'stores/main-store'
-import {
-  apiHandler,
-  decode,
-  encode,
-  getThumbnailUrl,
-  isMediaFile,
-  buildFileAccessUrl,
-  ROOT_FOLDER
-} from '../../appUtils'
+import CacheBustDialog from "components/files/CacheBustDialog.vue";
+import FileOptions from "components/files/FileOptions.vue";
+import MoveFolderPickerDialog from "components/files/MoveFolderPickerDialog.vue";
+import FilePreview from "components/preview/FilePreview.vue";
+import MediaGallery from "components/preview/MediaGallery.vue";
 
-import DragAndDrop from 'components/utils/DragAndDrop.vue'
-import FileContextMenu from 'pages/files/FileContextMenu.vue'
-import FileOptions from 'components/files/FileOptions.vue'
-import FilePreview from 'components/preview/FilePreview.vue'
-import MediaGallery from 'components/preview/MediaGallery.vue'
-import CacheBustDialog from 'components/files/CacheBustDialog.vue'
-import MoveFolderPickerDialog from 'components/files/MoveFolderPickerDialog.vue'
+import DragAndDrop from "components/utils/DragAndDrop.vue";
+import FileContextMenu from "pages/files/FileContextMenu.vue";
+import { useQuasar } from "quasar";
+import { useMainStore } from "stores/main-store";
+import {
+	computed,
+	defineComponent,
+	nextTick,
+	onBeforeUnmount,
+	onMounted,
+	ref,
+	watch,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
+import {
+	apiHandler,
+	buildFileAccessUrl,
+	decode,
+	encode,
+	getThumbnailUrl,
+	isMediaFile,
+	ROOT_FOLDER,
+} from "../../appUtils";
 
 export default defineComponent({
-  name: 'FileBrowser',
-  components: {
-    DragAndDrop,
-    FileContextMenu,
-    FileOptions,
-    FilePreview,
-    MediaGallery,
-    CacheBustDialog,
-    MoveFolderPickerDialog
-  },
-  props: {
-    bucket: {
-      type: String,
-      required: true
-    },
-    folder: {
-      type: String,
-      default: ''
-    }
-  },
-  setup(props, { emit }) {
-    const $q = useQuasar()
-    const route = useRoute()
-    const router = useRouter()
-    const mainStore = useMainStore()
-
-    // Refs
-    const preview = ref(null)
-    const options = ref(null)
-    const gallery = ref(null)
-    const cacheDialog = ref(null)
-    const moveDialog = ref(null)
-    const uploader = ref(null)
-
-    // State
-    const loading = ref(false)
-    const items = ref([])
-    const selectedItems = ref([])
-    const focusedIndex = ref(-1)
-    const viewMode = ref(localStorage.getItem('fileBrowserView') || 'grid')
-    const selectionMode = ref(false)
-    const dropTarget = ref(null)
-    const draggedItems = ref([])
-    const showMobileActions = ref(false)
-    const currentItem = ref(null)
-    const showThumbnailsInList = ref(true)
-    const touchTimer = ref(null)
-    const touchStartTime = ref(0)
-    const selectAll = ref(false)
-
-    // Computed
-    const selectedFolder = computed(() => {
-      if (props.folder && props.folder !== ROOT_FOLDER) {
-        return decode(props.folder)
-      }
-      return ''
-    })
-
-    const breadcrumbs = computed(() => {
-      if (selectedFolder.value) {
-        return [
-          {
-            name: props.bucket,
-            path: '/'
-          },
-          ...selectedFolder.value
-            .split('/')
-            .filter(obj => obj !== '')
-            .map((item, index, arr) => ({
-              name: item,
-              path: `${arr.slice(0, index + 1).join('/').replace('Home/', '')}/`
-            }))
-        ]
-      }
-      return [
-        {
-          name: props.bucket,
-          path: '/'
-        }
-      ]
-    })
-
-    const sortedItems = computed(() => {
-      return [...items.value].sort((a, b) => {
-        // Folders first
-        if (a.type === 'folder' && b.type !== 'folder') return -1
-        if (a.type !== 'folder' && b.type === 'folder') return 1
-        // Then alphabetical
-        return a.name.localeCompare(b.name)
-      })
-    })
-
-    const mediaFiles = computed(() => {
-      return items.value.filter(
-        item => item.type === 'file' && isMediaFile(item.name)
-      )
-    })
-
-    // Methods
-    const fetchFiles = async () => {
-      loading.value = true
-      try {
-        items.value = await apiHandler.fetchFile(
-          props.bucket,
-          selectedFolder.value,
-          '/'
-        )
-      } catch (error) {
-        console.error('Failed to fetch files:', error)
-        $q.notify({
-          type: 'negative',
-          message: 'Failed to load files'
-        })
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const isSelected = (item) => {
-      return selectedItems.value.some(selected => selected.key === item.key)
-    }
-
-    const clearSelection = () => {
-      selectedItems.value = []
-      selectionMode.value = false
-      selectAll.value = false
-    }
-
-    const handleSelectAll = (value) => {
-      if (value) {
-        selectedItems.value = [...items.value]
-      } else {
-        selectedItems.value = []
-      }
-    }
-
-    const handleItemClick = (event, item, index) => {
-      focusedIndex.value = index
-
-      if (event.ctrlKey || event.metaKey) {
-        const idx = selectedItems.value.findIndex(i => i.key === item.key)
-        if (idx >= 0) {
-          selectedItems.value.splice(idx, 1)
-        } else {
-          selectedItems.value.push(item)
-        }
-      } else if (event.shiftKey && selectedItems.value.length > 0) {
-        // Range selection
-        const lastSelected = selectedItems.value[selectedItems.value.length - 1]
-        const lastIndex = sortedItems.value.findIndex(i => i.key === lastSelected.key)
-        const start = Math.min(lastIndex, index)
-        const end = Math.max(lastIndex, index)
-        for (let i = start; i <= end; i++) {
-          const item = sortedItems.value[i]
-          if (!isSelected(item)) {
-            selectedItems.value.push(item)
-          }
-        }
-      } else if (!selectionMode.value && selectedItems.value.length === 0) {
-        // Normal click - navigate to folder
-        if (item.type === 'folder') {
-          openItem(item)
-        }
-      }
-    }
-
-    const handleItemDoubleClick = (event, item) => {
-      event.preventDefault()
-      clearSelection()
-      openItem(item)
-    }
-
-    const handleContextMenu = (event, item) => {
-      event.preventDefault()
-      if (!isSelected(item)) {
-        selectedItems.value = [item]
-      }
-      currentItem.value = item
-
-      if ($q.platform.is.mobile) {
-        showMobileActions.value = true
-      }
-    }
-
-    const handleTouchStart = (event, item, index) => {
-      touchStartTime.value = Date.now()
-      currentItem.value = item
-      focusedIndex.value = index
-
-      // Long press detection for selection mode
-      touchTimer.value = setTimeout(() => {
-        if (!selectionMode.value) {
-          selectionMode.value = true
-          selectedItems.value = [item]
-          if (navigator.vibrate) {
-            navigator.vibrate(50)
-          }
-        }
-      }, 500)
-    }
-
-    const handleTouchEnd = (event) => {
-      if (touchTimer.value) {
-        clearTimeout(touchTimer.value)
-        touchTimer.value = null
-      }
-
-      const touchDuration = Date.now() - touchStartTime.value
-      if (touchDuration < 500 && !selectionMode.value) {
-        // Short tap - open item
-        if (currentItem.value?.type === 'folder') {
-          openItem(currentItem.value)
-        }
-      }
-    }
-
-    const handleTouchMove = () => {
-      if (touchTimer.value) {
-        clearTimeout(touchTimer.value)
-        touchTimer.value = null
-      }
-    }
-
-    const handleContentClick = (event) => {
-      // Clear selection if clicking on empty space
-      if (event.target.classList.contains('file-browser-content') ||
-          event.target.classList.contains('file-grid') ||
-          event.target.classList.contains('file-list-body')) {
-        clearSelection()
-      }
-    }
-
-    const openItem = (item) => {
-      if (item.type === 'folder') {
-        router.push({
-          name: 'files-folder',
-          params: {
-            bucket: props.bucket,
-            folder: encode(item.key)
-          }
-        })
-      } else {
-        preview.value?.openFile(item)
-      }
-    }
-
-    const downloadItem = (item) => {
-      const link = document.createElement('a')
-      link.download = item.name
-      link.href = buildFileAccessUrl(props.bucket, item.key)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-
-    const onBreadcrumbClick = (crumb) => {
-      router.push({
-        name: 'files-folder',
-        params: {
-          bucket: props.bucket,
-          folder: encode(crumb.path)
-        }
-      })
-    }
-
-    const handleImageError = (event, item) => {
-      // Replace broken image with icon
-      event.target.style.display = 'none'
-      const icon = document.createElement('div')
-      icon.innerHTML = `<q-icon name="${item.icon}" color="${item.color}" size="48px" />`
-      event.target.parentElement.appendChild(icon)
-    }
-
-    const getItemCount = (folder) => {
-      // This would need to be implemented with API support
-      return 'Folder'
-    }
-
-    const showContextMenu = (event, item) => {
-      currentItem.value = item
-      if (!isSelected(item)) {
-        selectedItems.value = [item]
-      }
-    }
-
-    // Drag and drop
-    const handleDragStart = (event, item) => {
-      if (mainStore.apiReadonly) {
-        event.preventDefault()
-        return
-      }
-
-      if (selectedItems.value.length > 0 && isSelected(item)) {
-        draggedItems.value = [...selectedItems.value]
-      } else {
-        draggedItems.value = [item]
-      }
-
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', JSON.stringify(
-        draggedItems.value.map(item => item.key)
-      ))
-    }
-
-    const handleDragOver = (event, item) => {
-      if (mainStore.apiReadonly || item.type !== 'folder') {
-        return
-      }
-
-      const draggedKeys = draggedItems.value.map(item => item.key)
-      if (draggedKeys.includes(item.key)) {
-        return
-      }
-
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-      dropTarget.value = item.key
-    }
-
-    const handleDragLeave = (event) => {
-      dropTarget.value = null
-    }
-
-    const handleDrop = async (event, targetItem) => {
-      event.preventDefault()
-      dropTarget.value = null
-
-      if (mainStore.apiReadonly || targetItem.type !== 'folder' || draggedItems.value.length === 0) {
-        return
-      }
-
-      const destinationFolder = targetItem.key
-      const notif = $q.notify({
-        group: false,
-        spinner: true,
-        message: `Moving ${draggedItems.value.length} item${draggedItems.value.length > 1 ? 's' : ''}...`,
-        caption: '0%',
-        timeout: 0
-      })
-
-      try {
-        for (let i = 0; i < draggedItems.value.length; i++) {
-          const item = draggedItems.value[i]
-          const fileName = item.key.split('/').pop()
-          const newKey = `${destinationFolder}${fileName}`
-
-          await apiHandler.renameObject(props.bucket, item.key, newKey)
-
-          notif({
-            caption: `${Math.round(((i + 1) * 100) / draggedItems.value.length)}%`
-          })
-        }
-
-        notif({
-          icon: 'done',
-          spinner: false,
-          caption: '100%',
-          message: 'Items moved successfully!',
-          timeout: 2500
-        })
-
-        draggedItems.value = []
-        clearSelection()
-        fetchFiles()
-      } catch (error) {
-        notif({
-          icon: 'error',
-          spinner: false,
-          message: `Failed to move items: ${error.message}`,
-          color: 'negative',
-          timeout: 5000
-        })
-        draggedItems.value = []
-      }
-    }
-
-    // File operations
-    const handleDelete = (item) => {
-      options.value?.deleteObject(item || currentItem.value)
-    }
-
-    const handleRename = (item) => {
-      options.value?.renameObject(item || currentItem.value)
-    }
-
-    const handleUpdateMetadata = (item) => {
-      options.value?.updateMetadataObject(item || currentItem.value)
-    }
-
-    const handleShare = async (item) => {
-      const target = item || currentItem.value
-      let url
-
-      if (target.type === 'folder') {
-        url = window.location.origin + router.resolve({
-          name: 'files-folder',
-          params: {
-            bucket: props.bucket,
-            folder: encode(target.key)
-          }
-        }).href
-      } else {
-        url = buildFileAccessUrl(props.bucket, target.key)
-      }
-
-      try {
-        await navigator.clipboard.writeText(url)
-        $q.notify({
-          message: 'Link copied to clipboard!',
-          timeout: 2500,
-          type: 'positive'
-        })
-      } catch (err) {
-        $q.notify({
-          message: `Failed to copy: ${err}`,
-          timeout: 5000,
-          type: 'negative'
-        })
-      }
-    }
-
-    const handleRefreshCache = async (item) => {
-      const target = item || currentItem.value
-      const isFolder = target.type === 'folder'
-      let filesToRefresh = []
-
-      if (isFolder) {
-        const folderContents = await apiHandler.fetchFile(
-          props.bucket,
-          target.key,
-          ''
-        )
-        filesToRefresh = folderContents.filter(f => f.type === 'file')
-      } else {
-        filesToRefresh = [target]
-      }
-
-      cacheDialog.value?.open({
-        bucket: props.bucket,
-        files: filesToRefresh,
-        fileCount: filesToRefresh.length,
-        itemName: target.name,
-        isRecursive: isFolder,
-        onComplete: () => {
-          fetchFiles()
-        }
-      })
-    }
-
-    const handleBulkMove = (items) => {
-      moveDialog.value?.open(items || selectedItems.value)
-    }
-
-    const handleBulkDelete = () => {
-      if (selectedItems.value.length === 1) {
-        options.value?.deleteObject(selectedItems.value[0])
-      } else {
-        options.value?.bulkDeleteObjects(selectedItems.value)
-      }
-    }
-
-    const handleBulkRefreshCache = async () => {
-      const filesToRefresh = []
-
-      for (const item of selectedItems.value) {
-        if (item.type === 'folder') {
-          const folderContents = await apiHandler.fetchFile(
-            props.bucket,
-            item.key,
-            ''
-          )
-          filesToRefresh.push(...folderContents.filter(f => f.type === 'file'))
-        } else {
-          filesToRefresh.push(item)
-        }
-      }
-
-      cacheDialog.value?.open({
-        bucket: props.bucket,
-        files: filesToRefresh,
-        fileCount: filesToRefresh.length,
-        itemName: `${selectedItems.value.length} items`,
-        isRecursive: false,
-        onComplete: () => {
-          fetchFiles()
-          clearSelection()
-        }
-      })
-    }
-
-    const handleMoveComplete = () => {
-      clearSelection()
-      fetchFiles()
-    }
-
-    const openGallery = (file) => {
-      const mediaIndex = mediaFiles.value.findIndex(f => f.key === file.key)
-      if (mediaIndex !== -1) {
-        gallery.value?.open(mediaIndex)
-      }
-    }
-
-    // Keyboard navigation
-    const handleKeyDown = (event) => {
-      if (items.value.length === 0) return
-
-      switch (event.key) {
-        case 'ArrowDown':
-          event.preventDefault()
-          if (focusedIndex.value < sortedItems.value.length - 1) {
-            focusedIndex.value++
-          }
-          break
-        case 'ArrowUp':
-          event.preventDefault()
-          if (focusedIndex.value > 0) {
-            focusedIndex.value--
-          }
-          break
-        case 'Enter':
-          event.preventDefault()
-          if (focusedIndex.value >= 0 && focusedIndex.value < sortedItems.value.length) {
-            openItem(sortedItems.value[focusedIndex.value])
-          }
-          break
-        case ' ':
-          event.preventDefault()
-          if (focusedIndex.value >= 0 && focusedIndex.value < sortedItems.value.length) {
-            const item = sortedItems.value[focusedIndex.value]
-            const idx = selectedItems.value.findIndex(i => i.key === item.key)
-            if (idx >= 0) {
-              selectedItems.value.splice(idx, 1)
-            } else {
-              selectedItems.value.push(item)
-            }
-          }
-          break
-        case 'Delete':
-        case 'Backspace':
-          event.preventDefault()
-          if (selectedItems.value.length > 0) {
-            handleBulkDelete()
-          } else if (focusedIndex.value >= 0) {
-            options.value?.deleteObject(sortedItems.value[focusedIndex.value])
-          }
-          break
-        case 'Escape':
-          event.preventDefault()
-          clearSelection()
-          focusedIndex.value = -1
-          break
-        case 'a':
-        case 'A':
-          if (event.metaKey || event.ctrlKey) {
-            event.preventDefault()
-            selectedItems.value = [...items.value]
-          }
-          break
-      }
-    }
-
-    // Watch view mode changes
-    watch(viewMode, (newMode) => {
-      localStorage.setItem('fileBrowserView', newMode)
-    })
-
-    // Lifecycle
-    onMounted(() => {
-      fetchFiles()
-      document.addEventListener('keydown', handleKeyDown)
-
-      // Handle file preview from route
-      if (route.params.file) {
-        nextTick(async () => {
-          let key = decode(route.params.file)
-          if (selectedFolder.value && selectedFolder.value !== ROOT_FOLDER) {
-            key = `${selectedFolder.value}${decode(route.params.file)}`
-          }
-          const file = await apiHandler.headFile(props.bucket, key)
-          preview.value?.openFile(file)
-        })
-      }
-    })
-
-    onBeforeUnmount(() => {
-      document.removeEventListener('keydown', handleKeyDown)
-    })
-
-    // Watch for folder changes
-    watch(() => props.folder, fetchFiles)
-    watch(() => props.bucket, fetchFiles)
-
-    return {
-      // Refs
-      preview,
-      options,
-      gallery,
-      cacheDialog,
-      moveDialog,
-      uploader,
-
-      // State
-      loading,
-      items,
-      selectedItems,
-      focusedIndex,
-      viewMode,
-      selectionMode,
-      dropTarget,
-      draggedItems,
-      showMobileActions,
-      currentItem,
-      showThumbnailsInList,
-      selectAll,
-
-      // Computed
-      selectedFolder,
-      breadcrumbs,
-      sortedItems,
-      mediaFiles,
-
-      // Methods
-      fetchFiles,
-      isSelected,
-      clearSelection,
-      handleSelectAll,
-      handleItemClick,
-      handleItemDoubleClick,
-      handleContextMenu,
-      handleTouchStart,
-      handleTouchEnd,
-      handleTouchMove,
-      handleContentClick,
-      openItem,
-      downloadItem,
-      onBreadcrumbClick,
-      handleImageError,
-      getItemCount,
-      showContextMenu,
-      handleDragStart,
-      handleDragOver,
-      handleDragLeave,
-      handleDrop,
-      handleDelete,
-      handleRename,
-      handleUpdateMetadata,
-      handleShare,
-      handleRefreshCache,
-      handleBulkMove,
-      handleBulkDelete,
-      handleBulkRefreshCache,
-      handleMoveComplete,
-      openGallery,
-
-      // Utils
-      isMediaFile,
-      getThumbnailUrl,
-
-      // Store
-      mainStore,
-      $q
-    }
-  }
-})
+	name: "FileBrowser",
+	components: {
+		DragAndDrop,
+		FileContextMenu,
+		FileOptions,
+		FilePreview,
+		MediaGallery,
+		CacheBustDialog,
+		MoveFolderPickerDialog,
+	},
+	props: {
+		bucket: {
+			type: String,
+			required: true,
+		},
+		folder: {
+			type: String,
+			default: "",
+		},
+	},
+	setup(props) {
+		const $q = useQuasar();
+		const route = useRoute();
+		const router = useRouter();
+		const mainStore = useMainStore();
+
+		// Refs
+		const preview = ref(null);
+		const options = ref(null);
+		const gallery = ref(null);
+		const cacheDialog = ref(null);
+		const moveDialog = ref(null);
+		const uploader = ref(null);
+
+		// State
+		const loading = ref(false);
+		const items = ref([]);
+		const selectedItems = ref([]);
+		const focusedIndex = ref(-1);
+		const viewMode = ref(localStorage.getItem("fileBrowserView") || "grid");
+		const selectionMode = ref(false);
+		const dropTarget = ref(null);
+		const draggedItems = ref([]);
+		const showMobileActions = ref(false);
+		const currentItem = ref(null);
+		const showThumbnailsInList = ref(true);
+		const touchTimer = ref(null);
+		const touchStartTime = ref(0);
+		const selectAll = ref(false);
+
+		// Computed
+		const selectedFolder = computed(() => {
+			if (props.folder && props.folder !== ROOT_FOLDER) {
+				return decode(props.folder);
+			}
+			return "";
+		});
+
+		const breadcrumbs = computed(() => {
+			if (selectedFolder.value) {
+				return [
+					{
+						name: props.bucket,
+						path: "/",
+					},
+					...selectedFolder.value
+						.split("/")
+						.filter((obj) => obj !== "")
+						.map((item, index, arr) => ({
+							name: item,
+							path: `${arr
+								.slice(0, index + 1)
+								.join("/")
+								.replace("Home/", "")}/`,
+						})),
+				];
+			}
+			return [
+				{
+					name: props.bucket,
+					path: "/",
+				},
+			];
+		});
+
+		const sortedItems = computed(() => {
+			return [...items.value].sort((a, b) => {
+				// Folders first
+				if (a.type === "folder" && b.type !== "folder") return -1;
+				if (a.type !== "folder" && b.type === "folder") return 1;
+				// Then alphabetical
+				return a.name.localeCompare(b.name);
+			});
+		});
+
+		const mediaFiles = computed(() => {
+			return items.value.filter(
+				(item) => item.type === "file" && isMediaFile(item.name),
+			);
+		});
+
+		// Methods
+		const fetchFiles = async () => {
+			loading.value = true;
+			try {
+				items.value = await apiHandler.fetchFile(
+					props.bucket,
+					selectedFolder.value,
+					"/",
+				);
+			} catch (error) {
+				console.error("Failed to fetch files:", error);
+				$q.notify({
+					type: "negative",
+					message: "Failed to load files",
+				});
+			} finally {
+				loading.value = false;
+			}
+		};
+
+		const isSelected = (item) => {
+			return selectedItems.value.some((selected) => selected.key === item.key);
+		};
+
+		const clearSelection = () => {
+			selectedItems.value = [];
+			selectionMode.value = false;
+			selectAll.value = false;
+		};
+
+		const handleSelectAll = (value) => {
+			if (value) {
+				selectedItems.value = [...items.value];
+			} else {
+				selectedItems.value = [];
+			}
+		};
+
+		const handleItemClick = (event, item, index) => {
+			focusedIndex.value = index;
+
+			if (event.ctrlKey || event.metaKey) {
+				const idx = selectedItems.value.findIndex((i) => i.key === item.key);
+				if (idx >= 0) {
+					selectedItems.value.splice(idx, 1);
+				} else {
+					selectedItems.value.push(item);
+				}
+			} else if (event.shiftKey && selectedItems.value.length > 0) {
+				// Range selection
+				const lastSelected =
+					selectedItems.value[selectedItems.value.length - 1];
+				const lastIndex = sortedItems.value.findIndex(
+					(i) => i.key === lastSelected.key,
+				);
+				const start = Math.min(lastIndex, index);
+				const end = Math.max(lastIndex, index);
+				for (let i = start; i <= end; i++) {
+					const item = sortedItems.value[i];
+					if (!isSelected(item)) {
+						selectedItems.value.push(item);
+					}
+				}
+			} else if (!selectionMode.value && selectedItems.value.length === 0) {
+				// Normal click - navigate to folder
+				if (item.type === "folder") {
+					openItem(item);
+				}
+			}
+		};
+
+		const handleItemDoubleClick = (event, item) => {
+			event.preventDefault();
+			clearSelection();
+			openItem(item);
+		};
+
+		const handleContextMenu = (event, item) => {
+			event.preventDefault();
+			if (!isSelected(item)) {
+				selectedItems.value = [item];
+			}
+			currentItem.value = item;
+
+			if ($q.platform.is.mobile) {
+				showMobileActions.value = true;
+			}
+		};
+
+		const handleTouchStart = (_event, item, index) => {
+			touchStartTime.value = Date.now();
+			currentItem.value = item;
+			focusedIndex.value = index;
+
+			// Long press detection for selection mode
+			touchTimer.value = setTimeout(() => {
+				if (!selectionMode.value) {
+					selectionMode.value = true;
+					selectedItems.value = [item];
+					if (navigator.vibrate) {
+						navigator.vibrate(50);
+					}
+				}
+			}, 500);
+		};
+
+		const handleTouchEnd = (_event) => {
+			if (touchTimer.value) {
+				clearTimeout(touchTimer.value);
+				touchTimer.value = null;
+			}
+
+			const touchDuration = Date.now() - touchStartTime.value;
+			if (touchDuration < 500 && !selectionMode.value) {
+				// Short tap - open item
+				if (currentItem.value?.type === "folder") {
+					openItem(currentItem.value);
+				}
+			}
+		};
+
+		const handleTouchMove = () => {
+			if (touchTimer.value) {
+				clearTimeout(touchTimer.value);
+				touchTimer.value = null;
+			}
+		};
+
+		const handleContentClick = (event) => {
+			// Clear selection if clicking on empty space
+			if (
+				event.target.classList.contains("file-browser-content") ||
+				event.target.classList.contains("file-grid") ||
+				event.target.classList.contains("file-list-body")
+			) {
+				clearSelection();
+			}
+		};
+
+		const openItem = (item) => {
+			if (item.type === "folder") {
+				router.push({
+					name: "files-folder",
+					params: {
+						bucket: props.bucket,
+						folder: encode(item.key),
+					},
+				});
+			} else {
+				preview.value?.openFile(item);
+			}
+		};
+
+		const downloadItem = (item) => {
+			const link = document.createElement("a");
+			link.download = item.name;
+			link.href = buildFileAccessUrl(props.bucket, item.key);
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		};
+
+		const onBreadcrumbClick = (crumb) => {
+			router.push({
+				name: "files-folder",
+				params: {
+					bucket: props.bucket,
+					folder: encode(crumb.path),
+				},
+			});
+		};
+
+		const handleImageError = (event, item) => {
+			// Replace broken image with icon
+			event.target.style.display = "none";
+			const icon = document.createElement("div");
+			icon.innerHTML = `<q-icon name="${item.icon}" color="${item.color}" size="48px" />`;
+			event.target.parentElement.appendChild(icon);
+		};
+
+		const getItemCount = (_folder) => {
+			// This would need to be implemented with API support
+			return "Folder";
+		};
+
+		const showContextMenu = (_event, item) => {
+			currentItem.value = item;
+			if (!isSelected(item)) {
+				selectedItems.value = [item];
+			}
+		};
+
+		// Drag and drop
+		const handleDragStart = (event, item) => {
+			if (mainStore.apiReadonly) {
+				event.preventDefault();
+				return;
+			}
+
+			if (selectedItems.value.length > 0 && isSelected(item)) {
+				draggedItems.value = [...selectedItems.value];
+			} else {
+				draggedItems.value = [item];
+			}
+
+			event.dataTransfer.effectAllowed = "move";
+			event.dataTransfer.setData(
+				"text/plain",
+				JSON.stringify(draggedItems.value.map((item) => item.key)),
+			);
+		};
+
+		const handleDragOver = (event, item) => {
+			if (mainStore.apiReadonly || item.type !== "folder") {
+				return;
+			}
+
+			const draggedKeys = draggedItems.value.map((item) => item.key);
+			if (draggedKeys.includes(item.key)) {
+				return;
+			}
+
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "move";
+			dropTarget.value = item.key;
+		};
+
+		const handleDragLeave = (_event) => {
+			dropTarget.value = null;
+		};
+
+		const handleDrop = async (event, targetItem) => {
+			event.preventDefault();
+			dropTarget.value = null;
+
+			if (
+				mainStore.apiReadonly ||
+				targetItem.type !== "folder" ||
+				draggedItems.value.length === 0
+			) {
+				return;
+			}
+
+			const destinationFolder = targetItem.key;
+			const notif = $q.notify({
+				group: false,
+				spinner: true,
+				message: `Moving ${draggedItems.value.length} item${draggedItems.value.length > 1 ? "s" : ""}...`,
+				caption: "0%",
+				timeout: 0,
+			});
+
+			try {
+				for (let i = 0; i < draggedItems.value.length; i++) {
+					const item = draggedItems.value[i];
+					const fileName = item.key.split("/").pop();
+					const newKey = `${destinationFolder}${fileName}`;
+
+					await apiHandler.renameObject(props.bucket, item.key, newKey);
+
+					notif({
+						caption: `${Math.round(((i + 1) * 100) / draggedItems.value.length)}%`,
+					});
+				}
+
+				notif({
+					icon: "done",
+					spinner: false,
+					caption: "100%",
+					message: "Items moved successfully!",
+					timeout: 2500,
+				});
+
+				draggedItems.value = [];
+				clearSelection();
+				fetchFiles();
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to move items: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
+				});
+				draggedItems.value = [];
+			}
+		};
+
+		// File operations
+		const handleDelete = (item) => {
+			options.value?.deleteObject(item || currentItem.value);
+		};
+
+		const handleRename = (item) => {
+			options.value?.renameObject(item || currentItem.value);
+		};
+
+		const handleUpdateMetadata = (item) => {
+			options.value?.updateMetadataObject(item || currentItem.value);
+		};
+
+		const handleShare = async (item) => {
+			const target = item || currentItem.value;
+			let url;
+
+			if (target.type === "folder") {
+				url =
+					window.location.origin +
+					router.resolve({
+						name: "files-folder",
+						params: {
+							bucket: props.bucket,
+							folder: encode(target.key),
+						},
+					}).href;
+			} else {
+				url = buildFileAccessUrl(props.bucket, target.key);
+			}
+
+			try {
+				await navigator.clipboard.writeText(url);
+				$q.notify({
+					message: "Link copied to clipboard!",
+					timeout: 2500,
+					type: "positive",
+				});
+			} catch (err) {
+				$q.notify({
+					message: `Failed to copy: ${err}`,
+					timeout: 5000,
+					type: "negative",
+				});
+			}
+		};
+
+		const handleRefreshCache = async (item) => {
+			const target = item || currentItem.value;
+			const isFolder = target.type === "folder";
+			let filesToRefresh = [];
+
+			if (isFolder) {
+				const folderContents = await apiHandler.fetchFile(
+					props.bucket,
+					target.key,
+					"",
+				);
+				filesToRefresh = folderContents.filter((f) => f.type === "file");
+			} else {
+				filesToRefresh = [target];
+			}
+
+			cacheDialog.value?.open({
+				bucket: props.bucket,
+				files: filesToRefresh,
+				fileCount: filesToRefresh.length,
+				itemName: target.name,
+				isRecursive: isFolder,
+				onComplete: () => {
+					fetchFiles();
+				},
+			});
+		};
+
+		const handleBulkMove = (items) => {
+			moveDialog.value?.open(items || selectedItems.value);
+		};
+
+		const handleBulkDelete = () => {
+			if (selectedItems.value.length === 1) {
+				options.value?.deleteObject(selectedItems.value[0]);
+			} else {
+				options.value?.bulkDeleteObjects(selectedItems.value);
+			}
+		};
+
+		const handleBulkRefreshCache = async () => {
+			const filesToRefresh = [];
+
+			for (const item of selectedItems.value) {
+				if (item.type === "folder") {
+					const folderContents = await apiHandler.fetchFile(
+						props.bucket,
+						item.key,
+						"",
+					);
+					filesToRefresh.push(
+						...folderContents.filter((f) => f.type === "file"),
+					);
+				} else {
+					filesToRefresh.push(item);
+				}
+			}
+
+			cacheDialog.value?.open({
+				bucket: props.bucket,
+				files: filesToRefresh,
+				fileCount: filesToRefresh.length,
+				itemName: `${selectedItems.value.length} items`,
+				isRecursive: false,
+				onComplete: () => {
+					fetchFiles();
+					clearSelection();
+				},
+			});
+		};
+
+		const handleMoveComplete = () => {
+			clearSelection();
+			fetchFiles();
+		};
+
+		const openGallery = (file) => {
+			const mediaIndex = mediaFiles.value.findIndex((f) => f.key === file.key);
+			if (mediaIndex !== -1) {
+				gallery.value?.open(mediaIndex);
+			}
+		};
+
+		// Keyboard navigation
+		const handleKeyDown = (event) => {
+			if (items.value.length === 0) return;
+
+			switch (event.key) {
+				case "ArrowDown":
+					event.preventDefault();
+					if (focusedIndex.value < sortedItems.value.length - 1) {
+						focusedIndex.value++;
+					}
+					break;
+				case "ArrowUp":
+					event.preventDefault();
+					if (focusedIndex.value > 0) {
+						focusedIndex.value--;
+					}
+					break;
+				case "Enter":
+					event.preventDefault();
+					if (
+						focusedIndex.value >= 0 &&
+						focusedIndex.value < sortedItems.value.length
+					) {
+						openItem(sortedItems.value[focusedIndex.value]);
+					}
+					break;
+				case " ":
+					event.preventDefault();
+					if (
+						focusedIndex.value >= 0 &&
+						focusedIndex.value < sortedItems.value.length
+					) {
+						const item = sortedItems.value[focusedIndex.value];
+						const idx = selectedItems.value.findIndex(
+							(i) => i.key === item.key,
+						);
+						if (idx >= 0) {
+							selectedItems.value.splice(idx, 1);
+						} else {
+							selectedItems.value.push(item);
+						}
+					}
+					break;
+				case "Delete":
+				case "Backspace":
+					event.preventDefault();
+					if (selectedItems.value.length > 0) {
+						handleBulkDelete();
+					} else if (focusedIndex.value >= 0) {
+						options.value?.deleteObject(sortedItems.value[focusedIndex.value]);
+					}
+					break;
+				case "Escape":
+					event.preventDefault();
+					clearSelection();
+					focusedIndex.value = -1;
+					break;
+				case "a":
+				case "A":
+					if (event.metaKey || event.ctrlKey) {
+						event.preventDefault();
+						selectedItems.value = [...items.value];
+					}
+					break;
+			}
+		};
+
+		// Watch view mode changes
+		watch(viewMode, (newMode) => {
+			localStorage.setItem("fileBrowserView", newMode);
+		});
+
+		// Lifecycle
+		onMounted(() => {
+			fetchFiles();
+			document.addEventListener("keydown", handleKeyDown);
+
+			// Handle file preview from route
+			if (route.params.file) {
+				nextTick(async () => {
+					let key = decode(route.params.file);
+					if (selectedFolder.value && selectedFolder.value !== ROOT_FOLDER) {
+						key = `${selectedFolder.value}${decode(route.params.file)}`;
+					}
+					const file = await apiHandler.headFile(props.bucket, key);
+					preview.value?.openFile(file);
+				});
+			}
+		});
+
+		onBeforeUnmount(() => {
+			document.removeEventListener("keydown", handleKeyDown);
+		});
+
+		// Watch for folder changes
+		watch(() => props.folder, fetchFiles);
+		watch(() => props.bucket, fetchFiles);
+
+		return {
+			// Refs
+			preview,
+			options,
+			gallery,
+			cacheDialog,
+			moveDialog,
+			uploader,
+
+			// State
+			loading,
+			items,
+			selectedItems,
+			focusedIndex,
+			viewMode,
+			selectionMode,
+			dropTarget,
+			draggedItems,
+			showMobileActions,
+			currentItem,
+			showThumbnailsInList,
+			selectAll,
+
+			// Computed
+			selectedFolder,
+			breadcrumbs,
+			sortedItems,
+			mediaFiles,
+
+			// Methods
+			fetchFiles,
+			isSelected,
+			clearSelection,
+			handleSelectAll,
+			handleItemClick,
+			handleItemDoubleClick,
+			handleContextMenu,
+			handleTouchStart,
+			handleTouchEnd,
+			handleTouchMove,
+			handleContentClick,
+			openItem,
+			downloadItem,
+			onBreadcrumbClick,
+			handleImageError,
+			getItemCount,
+			showContextMenu,
+			handleDragStart,
+			handleDragOver,
+			handleDragLeave,
+			handleDrop,
+			handleDelete,
+			handleRename,
+			handleUpdateMetadata,
+			handleShare,
+			handleRefreshCache,
+			handleBulkMove,
+			handleBulkDelete,
+			handleBulkRefreshCache,
+			handleMoveComplete,
+			openGallery,
+
+			// Utils
+			isMediaFile,
+			getThumbnailUrl,
+
+			// Store
+			mainStore,
+			$q,
+		};
+	},
+});
 </script>
 
 <style lang="scss" scoped>

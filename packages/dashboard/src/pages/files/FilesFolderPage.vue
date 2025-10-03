@@ -8,8 +8,8 @@
 </template>
 
 <script>
-import { defineComponent } from "vue";
 import FileBrowser from "components/files/FileBrowser.vue";
+import { defineComponent } from "vue";
 
 export default defineComponent({
 	name: "FilesIndexPage",
