@@ -15,7 +15,15 @@
           <q-btn icon="save" label="Save" size="md" class="q-ml-md" color="green" dense @click="saveEdit" />
         </template>
         <template v-else>
-          <q-btn icon="edit" label="edit" size="md" class="q-ml-md" color="orange" dense @click="enableEdit" />
+          <q-btn icon="edit" label="Edit File" size="md" class="q-ml-md" color="orange" dense @click="enableEdit" />
+        </template>
+
+        <template v-if="editMetadataMode">
+          <q-btn icon="cancel" label="Cancel" size="md" class="q-ml-md" color="red" dense @click="cancelMetadataEdit" />
+          <q-btn icon="save" label="Save Info" size="md" class="q-ml-md" color="green" dense @click="saveMetadataEdit" />
+        </template>
+        <template v-else>
+          <q-btn icon="description" label="Edit Info" size="md" class="q-ml-md" color="primary" dense @click="enableMetadataEdit" />
         </template>
 
         <q-space />
@@ -61,7 +69,9 @@
           </template>
 
           <template v-else-if="type === 'image'">
-            <img :src="fileData" class="preview-image" />
+            <div class="image-preview-container">
+              <img :src="fileData" class="preview-image" />
+            </div>
           </template>
 
           <template v-else-if="type === 'audio'">
@@ -124,6 +134,60 @@
           </template>
         </template>
       </q-card-section>
+
+      <!-- Metadata Section -->
+      <q-separator />
+      <q-card-section class="metadata-section">
+        <template v-if="editMetadataMode">
+          <div class="q-gutter-md">
+            <q-input
+              v-model="fileDescriptionEdited"
+              label="Description (Markdown supported)"
+              type="textarea"
+              outlined
+              rows="6"
+              hint="You can use markdown formatting here"
+            />
+            <q-input
+              v-model="fileFigmaLinkEdited"
+              label="Figma Frame URL (optional)"
+              outlined
+              placeholder="https://www.figma.com/..."
+              hint="Link to related Figma frame or design"
+            >
+              <template v-slot:prepend>
+                <q-icon name="link" />
+              </template>
+            </q-input>
+          </div>
+        </template>
+        <template v-else>
+          <div class="metadata-display">
+            <div v-if="fileDescription || fileFigmaLink" class="q-gutter-md">
+              <div v-if="fileDescription" class="description-content">
+                <div class="text-h6 q-mb-sm">Description</div>
+                <div class="markdown" v-html="markdownParser(fileDescription)"></div>
+              </div>
+              <div v-if="fileFigmaLink" class="figma-link-content">
+                <div class="text-h6 q-mb-sm">Figma Design</div>
+                <q-btn
+                  type="a"
+                  :href="fileFigmaLink"
+                  target="_blank"
+                  color="primary"
+                  outline
+                  icon="open_in_new"
+                  label="Open in Figma"
+                />
+              </div>
+            </div>
+            <div v-else class="text-grey-6 text-center q-pa-md">
+              <q-icon name="info" size="sm" class="q-mr-sm" />
+              No description or Figma link added yet. Click "Edit Info" to add one.
+            </div>
+          </div>
+        </template>
+      </q-card-section>
     </q-card>
   </q-dialog>
 </template>
@@ -145,6 +209,7 @@ export default {
 	data: () => ({
 		open: false,
 		editMode: false,
+		editMetadataMode: false,
 
 		downloadProgress: 0,
 		abortControl: undefined,
@@ -153,6 +218,12 @@ export default {
 		filename: undefined,
 		fileData: undefined,
 		fileDataEdited: undefined,
+		
+		// Metadata fields
+		fileDescription: "",
+		fileDescriptionEdited: "",
+		fileFigmaLink: "",
+		fileFigmaLinkEdited: "",
 
 		previewConfig: [
 			{
@@ -264,6 +335,10 @@ export default {
 			this.file = file;
 			this.open = true;
 
+			// Load metadata from file's customMetadata
+			this.fileDescription = file.customMetadata?.description || "";
+			this.fileFigmaLink = file.customMetadata?.figmaLink || "";
+
 			if (previewConfig) {
 				this.type = previewConfig.type;
 
@@ -296,6 +371,7 @@ export default {
 			}
 
 			this.cancelEdit();
+			this.cancelMetadataEdit();
 
 			// console.log('call')
 			if (this.$route.params.file) {
@@ -324,6 +400,8 @@ export default {
 			this.filename = undefined;
 			this.abortControl = undefined;
 			this.downloadProgress = 0;
+			this.fileDescription = "";
+			this.fileFigmaLink = "";
 		},
 		markdownParser(text) {
 			return parseMarkdown(text);
@@ -428,6 +506,65 @@ export default {
 			this.cancelEdit();
 			this.openFile(this.file);
 		},
+
+		// Metadata edit functions
+		enableMetadataEdit: function () {
+			this.fileDescriptionEdited = this.fileDescription || "";
+			this.fileFigmaLinkEdited = this.fileFigmaLink || "";
+			this.editMetadataMode = true;
+		},
+		cancelMetadataEdit: function () {
+			this.editMetadataMode = false;
+			this.fileDescriptionEdited = "";
+			this.fileFigmaLinkEdited = "";
+		},
+		saveMetadataEdit: async function () {
+			const notif = this.q.notify({
+				group: false,
+				spinner: true,
+				message: "Saving metadata...",
+				timeout: 0,
+			});
+
+			try {
+				// Update the file's custom metadata
+				const customMetadata = {
+					...(this.file.customMetadata || {}),
+					description: this.fileDescriptionEdited || "",
+					figmaLink: this.fileFigmaLinkEdited || "",
+				};
+
+				await apiHandler.updateMetadata(
+					this.selectedBucket,
+					this.file.key,
+					customMetadata,
+					this.file.httpMetadata || {},
+				);
+
+				// Update local state
+				this.fileDescription = this.fileDescriptionEdited;
+				this.fileFigmaLink = this.fileFigmaLinkEdited;
+				this.file.customMetadata = customMetadata;
+
+				notif({
+					icon: "done",
+					spinner: false,
+					message: "Metadata saved successfully!",
+					color: "positive",
+					timeout: 2500,
+				});
+
+				this.cancelMetadataEdit();
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to save metadata: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
+				});
+			}
+		},
 	},
 	computed: {
 		selectedBucket: function () {
@@ -443,6 +580,16 @@ export default {
 </script>
 
 <style lang="scss">
+.image-preview-container {
+  background: #f5f5f5;
+  padding: 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
 .preview-image {
   max-width: 100%;
   height: auto;
@@ -468,6 +615,44 @@ export default {
         resize: none;
       }
     }
+  }
+}
+
+.metadata-section {
+  max-height: 400px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.metadata-display {
+  .description-content {
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+
+    .markdown {
+      color: #333;
+      line-height: 1.6;
+
+      p {
+        margin-bottom: 12px;
+      }
+
+      code {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+      }
+    }
+  }
+
+  .figma-link-content {
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
   }
 }
 </style>

@@ -103,12 +103,30 @@
 
               <!-- File info -->
               <div class="file-card-info">
-                <div class="file-card-name">{{ item.name }}</div>
+                <div class="file-card-name">
+                  {{ item.name }}
+                  <!-- Metadata indicators -->
+                  <span v-if="item.customMetadata?.description || item.customMetadata?.figmaLink" class="metadata-indicators">
+                    <q-icon v-if="item.customMetadata?.description" name="description" size="16px" class="q-ml-xs" />
+                    <q-icon v-if="item.customMetadata?.figmaLink" name="link" size="16px" class="q-ml-xs" color="primary" />
+                  </span>
+                </div>
                 <div class="file-card-meta">
                   <span v-if="item.type === 'file'">{{ item.size }}</span>
                   <span v-else>{{ getItemCount(item) }}</span>
                 </div>
               </div>
+
+              <!-- Hover tooltip -->
+              <q-tooltip v-if="item.customMetadata?.description || item.customMetadata?.figmaLink" :delay="500" max-width="400px" class="file-tooltip">
+                <div v-if="item.customMetadata?.description" class="tooltip-description">
+                  {{ truncateText(item.customMetadata.description, 150) }}
+                </div>
+                <div v-if="item.customMetadata?.figmaLink" class="tooltip-figma">
+                  <q-icon name="link" size="14px" class="q-mr-xs" />
+                  <span>Figma link available</span>
+                </div>
+              </q-tooltip>
 
               <!-- Quick actions -->
               <q-btn
@@ -207,7 +225,23 @@
                       class="q-mr-sm"
                     />
                     <span class="file-list-name-text">{{ item.name }}</span>
+                    <!-- Metadata indicators -->
+                    <span v-if="item.customMetadata?.description || item.customMetadata?.figmaLink" class="metadata-indicators q-ml-sm">
+                      <q-icon v-if="item.customMetadata?.description" name="description" size="16px" />
+                      <q-icon v-if="item.customMetadata?.figmaLink" name="link" size="16px" color="primary" />
+                    </span>
                   </div>
+                  
+                  <!-- Hover tooltip -->
+                  <q-tooltip v-if="item.customMetadata?.description || item.customMetadata?.figmaLink" :delay="500" max-width="400px" class="file-tooltip">
+                    <div v-if="item.customMetadata?.description" class="tooltip-description">
+                      {{ truncateText(item.customMetadata.description, 150) }}
+                    </div>
+                    <div v-if="item.customMetadata?.figmaLink" class="tooltip-figma">
+                      <q-icon name="link" size="14px" class="q-mr-xs" />
+                      <span>Figma link available</span>
+                    </div>
+                  </q-tooltip>
                 </div>
 
                 <div class="file-list-cell file-list-modified">
@@ -958,6 +992,12 @@ export default defineComponent({
 			}
 		};
 
+		const truncateText = (text, maxLength) => {
+			if (!text) return "";
+			if (text.length <= maxLength) return text;
+			return text.substring(0, maxLength) + "...";
+		};
+
 		// Keyboard navigation
 		const handleKeyDown = (event) => {
 			if (items.value.length === 0) return;
@@ -1118,6 +1158,7 @@ export default defineComponent({
 			handleBulkRefreshCache,
 			handleMoveComplete,
 			openGallery,
+			truncateText,
 
 			// Utils
 			isMediaFile,
@@ -1579,5 +1620,36 @@ export default defineComponent({
 .slide-up-leave-to {
   transform: translateY(100%);
   opacity: 0;
+}
+
+// Metadata indicators and tooltips
+.metadata-indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  
+  .q-icon {
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  &:hover .q-icon {
+    opacity: 1;
+  }
+}
+
+.file-tooltip {
+  .tooltip-description {
+    margin-bottom: 8px;
+    line-height: 1.4;
+    color: white;
+  }
+
+  .tooltip-figma {
+    display: flex;
+    align-items: center;
+    color: #90caf9;
+    font-size: 13px;
+  }
 }
 </style>
