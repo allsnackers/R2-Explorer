@@ -5,14 +5,6 @@
       <q-btn v-else color="green" icon="add" stack class="q-mb-lg" label="New">
         <q-menu>
           <q-list>
-            <q-item clickable v-close-popup @click="$refs.createFile.open()">
-              <q-item-section>
-                <q-item-label>
-                  <q-icon name="note_add" size="sm" />
-                  New File
-                </q-item-label>
-              </q-item-section>
-            </q-item>
             <q-item clickable v-close-popup @click="$refs.createFolder.open()">
               <q-item-section>
                 <q-item-label>
@@ -85,11 +77,9 @@
   </q-dialog>
 
   <create-folder ref="createFolder" />
-  <create-file ref="createFile" />
 </template>
 
 <script>
-import CreateFile from "components/files/CreateFile.vue";
 import CreateFolder from "components/files/CreateFolder.vue";
 import { useMainStore } from "stores/main-store";
 import { defineComponent } from "vue";
@@ -101,7 +91,7 @@ export default defineComponent({
 		updateAvailable: false,
 		latestVersion: "",
 	}),
-	components: { CreateFolder, CreateFile },
+	components: { CreateFolder },
 	methods: {
 		gotoEmail: function () {
 			if (this.selectedApp !== "email") this.changeApp("email");

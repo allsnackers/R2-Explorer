@@ -218,7 +218,7 @@ export default {
 		filename: undefined,
 		fileData: undefined,
 		fileDataEdited: undefined,
-		
+
 		// Metadata fields
 		fileDescription: "",
 		fileDescriptionEdited: "",

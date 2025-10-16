@@ -30,19 +30,34 @@
     </q-card>
   </q-dialog>
 
-  <q-dialog v-model="renameModal" @hide="reset">
-    <q-card style="min-width: 300px;">
-      <q-card-section class="row column" v-if="row">
-        <q-avatar class="q-mb-md" icon="edit" color="orange" text-color="white" />
-        <q-input v-model="renameInput" label="Standard" />
-      </q-card-section>
+	<q-dialog v-model="renameModal" @hide="reset">
+		<q-card style="min-width: 320px;">
+			<q-card-section class="row column" v-if="row">
+				<q-avatar class="q-mb-md" icon="edit" color="orange" text-color="white" />
+				<q-input
+					v-model="renameInput"
+					label="New name"
+					dense
+					autofocus
+					:error="Boolean(renameError)"
+					:error-message="renameError"
+					@keyup.enter="renameConfirm"
+				/>
+			</q-card-section>
 
-      <q-card-actions align="right">
-        <q-btn flat label="Cancel" color="primary" v-close-popup />
-        <q-btn flat label="Rename" color="orange" :loading="loading" @click="renameConfirm" />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+			<q-card-actions align="right">
+				<q-btn flat label="Cancel" color="primary" v-close-popup />
+				<q-btn
+					flat
+					label="Rename"
+					color="orange"
+					:loading="loading"
+					:disable="renameDisabled"
+					@click="renameConfirm"
+				/>
+			</q-card-actions>
+		</q-card>
+	</q-dialog>
 
   <q-dialog v-model="updateMetadataModal" @hide="reset">
     <q-card style="min-width: 300px;">
@@ -101,11 +116,20 @@ export default defineComponent({
 		deleteFolderInnerFilesCount: null,
 		newFolderName: "",
 		renameInput: "",
+		existingItems: [],
+		renameServerError: "",
 		updateCustomMetadata: [],
 		updateHttpMetadata: [],
 		loading: false,
 		permanentDelete: false,
 	}),
+	watch: {
+		renameInput() {
+			if (this.renameServerError) {
+				this.renameServerError = "";
+			}
+		},
+	},
 	methods: {
 		deleteObject: async function (row) {
 			this.deleteModal = true;
@@ -127,11 +151,12 @@ export default defineComponent({
 			this.row = null;
 			this.permanentDelete = rows.some((r) => r.key?.startsWith(".trash/"));
 		},
-		renameObject: async function (row) {
+		renameObject: async function (row, availableItems = []) {
 			this.renameModal = true;
 			this.row = row;
-			// console.log(row)
-			this.renameInput = row.name;
+			this.renameInput = row.name.trim();
+			this.existingItems = availableItems;
+			this.renameServerError = "";
 		},
 		updateMetadataObject: async function (row) {
 			this.updateMetadataModal = true;
@@ -152,26 +177,61 @@ export default defineComponent({
 			}
 		},
 		renameConfirm: async function () {
-			if (this.renameInput.length === 0) {
+			const trimmedName = this.renameInput.trim();
+			this.renameInput = trimmedName;
+			if (!trimmedName || this.renameError) {
+				return;
+			}
+			const currentName = this.row?.name || "";
+			if (trimmedName === currentName) {
+				this.reset();
 				return;
 			}
 
-			this.loading = true;
-			await apiHandler.renameObject(
-				this.selectedBucket,
-				this.row.key,
-				this.row.key.replace(this.row.name, this.renameInput),
+			const prefix = this.row.key.slice(
+				0,
+				this.row.key.length - currentName.length,
 			);
+			const newKey = `${prefix}${trimmedName}`;
 
-			this.$bus.emit("fetchFiles");
-			this.reset();
-			this.q.notify({
-				group: false,
-				icon: "done", // we add an icon
-				spinner: false, // we reset the spinner setting so the icon can be displayed
-				message: "File renamed!",
-				timeout: 2500, // we will timeout it in 2.5s
-			});
+			this.loading = true;
+			this.renameServerError = "";
+
+			try {
+				await apiHandler.renameObject(
+					this.selectedBucket,
+					this.row.key,
+					newKey,
+				);
+
+				this.$bus.emit("fetchFiles");
+				this.q.notify({
+					group: false,
+					icon: "done",
+					spinner: false,
+					message: "File renamed!",
+					timeout: 2500,
+				});
+				this.reset();
+			} catch (error) {
+				const message =
+					error?.response?.data?.error ||
+					error?.response?.data?.message ||
+					error?.response?.data ||
+					error?.message ||
+					"Unable to rename file";
+				this.renameServerError = message;
+				this.q.notify({
+					group: false,
+					icon: "error",
+					spinner: false,
+					message: `Failed to rename: ${message}`,
+					type: "negative",
+					timeout: 5000,
+				});
+			} finally {
+				this.loading = false;
+			}
 		},
 		updateConfirm: async function () {
 			this.loading = true;
@@ -346,6 +406,8 @@ export default defineComponent({
 			this.renameModal = false;
 			this.updateMetadataModal = false;
 			this.renameInput = "";
+			this.existingItems = [];
+			this.renameServerError = "";
 			this.updateCustomMetadata = [];
 			this.updateHttpMetadata = [];
 			this.row = null;
@@ -378,6 +440,57 @@ export default defineComponent({
 				return decode(this.$route.params.folder);
 			}
 			return "";
+		},
+		renameError: function () {
+			if (!this.renameModal || !this.row) {
+				return "";
+			}
+
+			const value = this.renameInput.trim();
+
+			if (!value) {
+				return "Name can't be empty";
+			}
+
+			if (/[\\:*?"<>|]/.test(value)) {
+				return "Name can't include \\ : * ? \" < > |";
+			}
+
+			if (value.includes("/")) {
+				return "Name can't contain /";
+			}
+
+			const duplicate = this.existingItems.some(
+				(item) =>
+					item.key !== this.row.key &&
+					(item.name || "").trim().toLowerCase() === value.toLowerCase(),
+			);
+
+			if (duplicate) {
+				return "An item with this name already exists";
+			}
+
+			return this.renameServerError;
+		},
+		renameDisabled: function () {
+			if (!this.row) {
+				return true;
+			}
+
+			if (this.loading) {
+				return true;
+			}
+
+			const value = this.renameInput.trim();
+			if (!value) {
+				return true;
+			}
+
+			if (value === (this.row.name || "").trim()) {
+				return true;
+			}
+
+			return Boolean(this.renameError);
 		},
 	},
 	setup() {

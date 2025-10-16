@@ -14,28 +14,67 @@
 
       <q-space />
 
-      <!-- View Toggle -->
-      <q-btn-toggle
-        v-model="viewMode"
-        toggle-color="primary"
-        :options="[
-          { label: '', value: 'grid', icon: 'grid_view', tooltip: 'Grid View' },
-          { label: '', value: 'list', icon: 'view_list', tooltip: 'List View' }
-        ]"
-        flat
-        dense
-        class="view-toggle"
-      >
-        <template v-slot:option="scope">
-          <q-tooltip>{{ scope.opt.tooltip }}</q-tooltip>
-          <q-icon :name="scope.opt.icon" />
-        </template>
-      </q-btn-toggle>
+			<div class="file-browser-actions">
+				<q-btn
+					v-if="!mainStore.apiReadonly"
+					color="primary"
+					icon="add"
+					label="New"
+					unelevated
+					no-caps
+					class="q-mr-sm"
+				>
+					<q-menu transition-show="jump-down" transition-hide="jump-up">
+						<q-list style="min-width: 200px">
+							<q-item clickable v-close-popup @click="openCreateFolder">
+								<q-item-section avatar>
+									<q-icon name="create_new_folder" />
+								</q-item-section>
+								<q-item-section>New Folder</q-item-section>
+							</q-item>
+
+							<q-separator />
+
+							<q-item clickable v-close-popup @click="openUploadFiles">
+								<q-item-section avatar>
+									<q-icon name="upload_file" />
+								</q-item-section>
+								<q-item-section>Upload Files</q-item-section>
+							</q-item>
+
+							<q-item clickable v-close-popup @click="openUploadFolders">
+								<q-item-section avatar>
+									<q-icon name="folder" />
+								</q-item-section>
+								<q-item-section>Upload Folder</q-item-section>
+							</q-item>
+						</q-list>
+					</q-menu>
+				</q-btn>
+
+				<!-- View Toggle -->
+				<q-btn-toggle
+					v-model="viewMode"
+					toggle-color="primary"
+					:options="[
+						{ label: '', value: 'grid', icon: 'grid_view', tooltip: 'Grid View' },
+						{ label: '', value: 'list', icon: 'view_list', tooltip: 'List View' }
+					]"
+					flat
+					dense
+					class="view-toggle"
+				>
+					<template v-slot:option="scope">
+						<q-tooltip>{{ scope.opt.tooltip }}</q-tooltip>
+						<q-icon :name="scope.opt.icon" />
+					</template>
+				</q-btn-toggle>
+			</div>
     </div>
 
     <!-- Main content area with drag and drop -->
     <drag-and-drop ref="uploader">
-      <div class="file-browser-content" @click="handleContentClick">
+	<div class="file-browser-content" @click="handleContentClick" @contextmenu="handleBackgroundContextMenu">
         <!-- Loading state -->
         <div v-if="loading" class="loading-container">
           <q-spinner color="primary" size="xl" />
@@ -283,6 +322,66 @@
       </div>
     </drag-and-drop>
 
+		<q-menu
+			ref="contextMenuRef"
+			context-menu
+			touch-position
+			@hide="contextMenuItem = null"
+		>
+			<file-context-menu
+				v-if="contextMenuItem"
+				:prop="{ row: contextMenuItem }"
+				:selectedRows="selectedItems"
+				@openObject="openItem"
+				@deleteObject="handleDelete"
+				@renameObject="handleRename"
+				@updateMetadataObject="handleUpdateMetadata"
+				@refreshCacheVersion="handleRefreshCache"
+				@bulkMove="handleBulkMove"
+				@bulkDelete="handleBulkDelete"
+			/>
+		</q-menu>
+
+			<q-menu
+				ref="backgroundMenuRef"
+				context-menu
+				touch-position
+			>
+				<q-list style="min-width: 180px">
+					<q-item clickable v-close-popup @click="openCreateFolder" :disable="mainStore.apiReadonly">
+						<q-item-section avatar>
+							<q-icon name="create_new_folder" />
+						</q-item-section>
+						<q-item-section>New Folder</q-item-section>
+					</q-item>
+
+					<q-separator />
+
+					<q-item clickable v-close-popup @click="openUploadFiles" :disable="mainStore.apiReadonly">
+						<q-item-section avatar>
+							<q-icon name="upload_file" />
+						</q-item-section>
+						<q-item-section>Upload Files</q-item-section>
+					</q-item>
+
+					<q-item clickable v-close-popup @click="openUploadFolders" :disable="mainStore.apiReadonly">
+						<q-item-section avatar>
+							<q-icon name="folder" />
+						</q-item-section>
+						<q-item-section>Upload Folder</q-item-section>
+					</q-item>
+
+					<q-separator />
+
+					<q-item clickable v-close-popup @click="fetchFiles">
+						<q-item-section avatar>
+							<q-icon name="refresh" />
+						</q-item-section>
+						<q-item-section>Refresh</q-item-section>
+					</q-item>
+				</q-list>
+			</q-menu>
+
     <!-- Mobile action sheet -->
     <q-dialog v-model="showMobileActions" position="bottom">
       <q-card class="mobile-action-sheet">
@@ -389,10 +488,12 @@
   <media-gallery ref="gallery" :mediaFiles="mediaFiles" :bucket="bucket" />
   <cache-bust-dialog ref="cacheDialog" />
   <move-folder-picker-dialog ref="moveDialog" @move="handleMoveComplete" />
+	<create-folder ref="createFolderDialog" />
 </template>
 
 <script>
 import CacheBustDialog from "components/files/CacheBustDialog.vue";
+import CreateFolder from "components/files/CreateFolder.vue";
 import FileOptions from "components/files/FileOptions.vue";
 import MoveFolderPickerDialog from "components/files/MoveFolderPickerDialog.vue";
 import FilePreview from "components/preview/FilePreview.vue";
@@ -405,6 +506,7 @@ import { useMainStore } from "stores/main-store";
 import {
 	computed,
 	defineComponent,
+	inject,
 	nextTick,
 	onBeforeUnmount,
 	onMounted,
@@ -432,6 +534,7 @@ export default defineComponent({
 		MediaGallery,
 		CacheBustDialog,
 		MoveFolderPickerDialog,
+		CreateFolder,
 	},
 	props: {
 		bucket: {
@@ -448,6 +551,7 @@ export default defineComponent({
 		const route = useRoute();
 		const router = useRouter();
 		const mainStore = useMainStore();
+		const bus = inject("bus", null);
 
 		// Refs
 		const preview = ref(null);
@@ -456,6 +560,10 @@ export default defineComponent({
 		const cacheDialog = ref(null);
 		const moveDialog = ref(null);
 		const uploader = ref(null);
+		const contextMenuRef = ref(null);
+		const contextMenuItem = ref(null);
+		const backgroundMenuRef = ref(null);
+		const createFolderDialog = ref(null);
 
 		// State
 		const loading = ref(false);
@@ -614,6 +722,7 @@ export default defineComponent({
 
 		const handleContextMenu = (event, item) => {
 			event.preventDefault();
+			event.stopPropagation();
 			if (!isSelected(item)) {
 				selectedItems.value = [item];
 			}
@@ -621,7 +730,30 @@ export default defineComponent({
 
 			if ($q.platform.is.mobile) {
 				showMobileActions.value = true;
+				return;
 			}
+
+			contextMenuItem.value = item;
+			if (contextMenuRef.value?.hide) {
+				contextMenuRef.value.hide();
+			}
+			nextTick(() => {
+				contextMenuRef.value?.show(event);
+			});
+		};
+
+		const handleBackgroundContextMenu = (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			if ($q.platform.is.mobile) {
+				return;
+			}
+			selectedItems.value = [];
+			currentItem.value = null;
+			contextMenuItem.value = null;
+			nextTick(() => {
+				backgroundMenuRef.value?.show(event);
+			});
 		};
 
 		const handleTouchStart = (_event, item, index) => {
@@ -697,6 +829,27 @@ export default defineComponent({
 			document.body.removeChild(link);
 		};
 
+		const openUploadFiles = () => {
+			if (mainStore.apiReadonly) {
+				return;
+			}
+			uploader.value?.openFilesUploader();
+		};
+
+		const openUploadFolders = () => {
+			if (mainStore.apiReadonly) {
+				return;
+			}
+			uploader.value?.openFoldersUploader();
+		};
+
+		const openCreateFolder = () => {
+			if (mainStore.apiReadonly) {
+				return;
+			}
+			createFolderDialog.value?.open();
+		};
+
 		const onBreadcrumbClick = (crumb) => {
 			router.push({
 				name: "files-folder",
@@ -709,40 +862,43 @@ export default defineComponent({
 
 		const handleImageError = (event, item) => {
 			// Log detailed error information
-			console.group('🖼️ Failed to load thumbnail');
-			console.warn('File:', item.name);
-			console.warn('URL:', event.target.src);
-			console.warn('Item key:', item.key);
-			console.warn('Bucket:', props.bucket);
-			
+			console.group("🖼️ Failed to load thumbnail");
+			console.warn("File:", item.name);
+			console.warn("URL:", event.target.src);
+			console.warn("Item key:", item.key);
+			console.warn("Bucket:", props.bucket);
+
 			// Check for network or CORS issues
 			if (event.target.complete === false) {
-				console.warn('Image failed to complete loading - possible network or CORS issue');
+				console.warn(
+					"Image failed to complete loading - possible network or CORS issue",
+				);
 			}
-			
+
 			console.groupEnd();
-			
+
 			// Hide the broken image
 			event.target.style.display = "none";
-			
+
 			// Check if we already added a fallback icon to avoid duplicates
 			const parent = event.target.parentElement;
-			if (parent.querySelector('.fallback-icon')) {
+			if (parent.querySelector(".fallback-icon")) {
 				return;
 			}
-			
+
 			// Create a fallback icon element
 			const iconWrapper = document.createElement("div");
 			iconWrapper.className = "fallback-icon";
-			iconWrapper.style.cssText = "display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;";
-			
+			iconWrapper.style.cssText =
+				"display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;";
+
 			const icon = document.createElement("i");
 			icon.className = `q-icon notranslate material-icons text-${item.color}`;
 			icon.style.fontSize = "48px";
 			icon.setAttribute("aria-hidden", "true");
 			icon.setAttribute("role", "img");
 			icon.textContent = item.icon;
-			
+
 			iconWrapper.appendChild(icon);
 			parent.appendChild(iconWrapper);
 		};
@@ -750,7 +906,7 @@ export default defineComponent({
 		const handleImageLoad = (_event, item) => {
 			// Log successful loads for debugging
 			if (import.meta.env.DEV) {
-				console.log('Successfully loaded thumbnail for:', item.name);
+				console.log("Successfully loaded thumbnail for:", item.name);
 			}
 		};
 
@@ -868,7 +1024,11 @@ export default defineComponent({
 		};
 
 		const handleRename = (item) => {
-			options.value?.renameObject(item || currentItem.value);
+			const target = item || currentItem.value;
+			if (!target) {
+				return;
+			}
+			options.value?.renameObject(target, sortedItems.value);
 		};
 
 		const handleUpdateMetadata = (item) => {
@@ -995,11 +1155,28 @@ export default defineComponent({
 		const truncateText = (text, maxLength) => {
 			if (!text) return "";
 			if (text.length <= maxLength) return text;
-			return text.substring(0, maxLength) + "...";
+			return `${text.substring(0, maxLength)}...`;
 		};
 
 		// Keyboard navigation
 		const handleKeyDown = (event) => {
+			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				(target.closest("input, textarea, select, [contenteditable]") ||
+					target.getAttribute("role") === "textbox")
+			) {
+				return;
+			}
+
+			const activeElement = document.activeElement;
+			if (
+				activeElement instanceof HTMLElement &&
+				activeElement.closest("input, textarea, select, [contenteditable]")
+			) {
+				return;
+			}
+
 			if (items.value.length === 0) return;
 
 			switch (event.key) {
@@ -1074,6 +1251,7 @@ export default defineComponent({
 		onMounted(() => {
 			fetchFiles();
 			document.addEventListener("keydown", handleKeyDown);
+			bus?.on("fetchFiles", fetchFiles);
 
 			// Handle file preview from route
 			if (route.params.file) {
@@ -1090,6 +1268,7 @@ export default defineComponent({
 
 		onBeforeUnmount(() => {
 			document.removeEventListener("keydown", handleKeyDown);
+			bus?.off("fetchFiles", fetchFiles);
 		});
 
 		// Watch for folder changes
@@ -1104,6 +1283,10 @@ export default defineComponent({
 			cacheDialog,
 			moveDialog,
 			uploader,
+			contextMenuRef,
+			contextMenuItem,
+			backgroundMenuRef,
+			createFolderDialog,
 
 			// State
 			loading,
@@ -1137,8 +1320,12 @@ export default defineComponent({
 			handleTouchEnd,
 			handleTouchMove,
 			handleContentClick,
+			handleBackgroundContextMenu,
 			openItem,
 			downloadItem,
+			openCreateFolder,
+			openUploadFiles,
+			openUploadFolders,
 			onBreadcrumbClick,
 			handleImageError,
 			handleImageLoad,
@@ -1233,6 +1420,13 @@ export default defineComponent({
 
 .view-toggle {
   flex-shrink: 0;
+}
+
+.file-browser-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
 }
 
 .file-browser-content {
@@ -1359,6 +1553,7 @@ export default defineComponent({
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
+	line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   line-height: 1.2;

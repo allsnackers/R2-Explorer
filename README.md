@@ -52,8 +52,9 @@ R2-Explorer transforms your Cloudflare R2 storage experience with a modern, user
 - **📁 File Management**
   - Drag-and-drop file upload
   - Folder creation and organization
+  -  File renaming with inline validation and conflict detection
   - Multi-part upload for large files
-  - Right-click context menu for advanced options
+  -  Right-click context menus for files and folders
   - HTTP/Custom metadata editing
 
 - **👀 File Handling**
