@@ -185,6 +185,7 @@
                     @openObject="openItem"
                     @deleteObject="handleDelete"
                     @renameObject="handleRename"
+                    @replaceObject="handleReplace"
                     @updateMetadataObject="handleUpdateMetadata"
                     @refreshCacheVersion="handleRefreshCache"
                     @bulkMove="handleBulkMove"
@@ -307,6 +308,7 @@
                         @openObject="openItem"
                         @deleteObject="handleDelete"
                         @renameObject="handleRename"
+                        @replaceObject="handleReplace"
                         @updateMetadataObject="handleUpdateMetadata"
                         @refreshCacheVersion="handleRefreshCache"
                         @bulkMove="handleBulkMove"
@@ -335,6 +337,7 @@
 				@openObject="openItem"
 				@deleteObject="handleDelete"
 				@renameObject="handleRename"
+				@replaceObject="handleReplace"
 				@updateMetadataObject="handleUpdateMetadata"
 				@refreshCacheVersion="handleRefreshCache"
 				@bulkMove="handleBulkMove"
@@ -400,6 +403,13 @@
             <q-item-section>Download</q-item-section>
           </q-item>
 
+          <q-item v-if="currentItem?.type === 'file'" clickable v-close-popup @click="handleReplace(currentItem)">
+            <q-item-section avatar>
+              <q-icon name="published_with_changes" />
+            </q-item-section>
+            <q-item-section>Replace File...</q-item-section>
+          </q-item>
+
           <q-item clickable v-close-popup @click="handleRename(currentItem)">
             <q-item-section avatar>
               <q-icon name="edit" />
@@ -455,6 +465,24 @@
             <q-btn
               flat
               dense
+              icon="drive_file_rename_outline"
+              label="Rename"
+              :disable="!canRenameSelection"
+              @click="handleBulkRename"
+              class="q-mr-sm"
+            />
+            <q-btn
+              flat
+              dense
+              icon="published_with_changes"
+              label="Replace"
+              :disable="!canReplaceSelection"
+              @click="handleBulkReplace"
+              class="q-mr-sm"
+            />
+            <q-btn
+              flat
+              dense
               icon="refresh"
               label="Refresh Cache"
               color="orange"
@@ -481,6 +509,14 @@
       </div>
     </transition>
   </div>
+
+  <input
+	ref="replaceInput"
+	type="file"
+	style="display: none"
+	@change="handleReplaceFileChange"
+	accept="*/*"
+  />
 
   <!-- Child component dialogs -->
   <file-preview ref="preview" />
@@ -564,6 +600,8 @@ export default defineComponent({
 		const contextMenuItem = ref(null);
 		const backgroundMenuRef = ref(null);
 		const createFolderDialog = ref(null);
+		const replaceInput = ref(null);
+		const replaceTarget = ref(null);
 
 		// State
 		const loading = ref(false);
@@ -629,6 +667,17 @@ export default defineComponent({
 		const mediaFiles = computed(() => {
 			return items.value.filter(
 				(item) => item.type === "file" && isMediaFile(item.name),
+			);
+		});
+
+		const canRenameSelection = computed(() => {
+			return selectedItems.value.length === 1;
+		});
+
+		const canReplaceSelection = computed(() => {
+			return (
+				selectedItems.value.length === 1 &&
+				selectedItems.value[0].type === "file"
 			);
 		});
 
@@ -1035,6 +1084,143 @@ export default defineComponent({
 			options.value?.updateMetadataObject(item || currentItem.value);
 		};
 
+		const resetReplaceState = () => {
+			replaceTarget.value = null;
+			if (replaceInput.value) {
+				replaceInput.value.value = "";
+			}
+		};
+
+		const handleReplace = (item) => {
+			const target =
+				item ||
+				(selectedItems.value.length === 1 ? selectedItems.value[0] : null) ||
+				currentItem.value;
+
+			if (!target || target.type !== "file") {
+				$q.notify({
+					type: "warning",
+					message: "Select a file to replace.",
+				});
+				return;
+			}
+
+			if (mainStore.apiReadonly) {
+				$q.notify({
+					type: "negative",
+					message: "Bucket is in read-only mode; replacing files is disabled.",
+				});
+				return;
+			}
+
+			replaceTarget.value = target;
+			nextTick(() => {
+				if (replaceInput.value) {
+					replaceInput.value.value = "";
+					replaceInput.value.click();
+				}
+			});
+		};
+
+		const handleReplaceFileChange = async (event) => {
+			const inputEl = event.target;
+			const file = inputEl?.files?.[0];
+
+			if (!file || !replaceTarget.value) {
+				resetReplaceState();
+				return;
+			}
+
+			if (mainStore.apiReadonly) {
+				$q.notify({
+					type: "negative",
+					message: "Bucket is in read-only mode; replacing files is disabled.",
+				});
+				resetReplaceState();
+				return;
+			}
+
+			const target = replaceTarget.value;
+			const notif = $q.notify({
+				group: false,
+				spinner: true,
+				message: `Replacing ${target.name}...`,
+				caption: "0%",
+				timeout: 0,
+			});
+
+			try {
+				await apiHandler.uploadObjects(
+					file,
+					target.key,
+					props.bucket,
+					(progressEvent) => {
+						if (!progressEvent?.total) {
+							return;
+						}
+						notif({
+							caption: `${Math.round((progressEvent.loaded * 100) / progressEvent.total)}%`,
+						});
+					},
+					{
+						customMetadata: { ...(target.customMetadata || {}) },
+						httpMetadata: { ...(target.httpMetadata || {}) },
+					},
+				);
+
+				notif({
+					icon: "done",
+					spinner: false,
+					caption: "100%",
+					message: "File replaced!",
+					timeout: 2500,
+				});
+				fetchFiles();
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to replace file: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
+				});
+			} finally {
+				resetReplaceState();
+			}
+		};
+
+		const handleBulkRename = () => {
+			if (selectedItems.value.length !== 1) {
+				$q.notify({
+					type: "info",
+					message: "Select a single item to rename.",
+				});
+				return;
+			}
+			handleRename(selectedItems.value[0]);
+		};
+
+		const handleBulkReplace = () => {
+			if (selectedItems.value.length !== 1) {
+				$q.notify({
+					type: "info",
+					message: "Select a single file to replace.",
+				});
+				return;
+			}
+
+			const target = selectedItems.value[0];
+			if (target.type !== "file") {
+				$q.notify({
+					type: "warning",
+					message: "Only files can be replaced.",
+				});
+				return;
+			}
+
+			handleReplace(target);
+		};
+
 		const handleShare = async (item) => {
 			const target = item || currentItem.value;
 			let url;
@@ -1227,6 +1413,17 @@ export default defineComponent({
 						options.value?.deleteObject(sortedItems.value[focusedIndex.value]);
 					}
 					break;
+				case "F2":
+					event.preventDefault();
+					if (selectedItems.value.length === 1) {
+						handleRename(selectedItems.value[0]);
+					} else if (
+						focusedIndex.value >= 0 &&
+						focusedIndex.value < sortedItems.value.length
+					) {
+						handleRename(sortedItems.value[focusedIndex.value]);
+					}
+					break;
 				case "Escape":
 					event.preventDefault();
 					clearSelection();
@@ -1287,6 +1484,7 @@ export default defineComponent({
 			contextMenuItem,
 			backgroundMenuRef,
 			createFolderDialog,
+			replaceInput,
 
 			// State
 			loading,
@@ -1307,6 +1505,8 @@ export default defineComponent({
 			breadcrumbs,
 			sortedItems,
 			mediaFiles,
+			canRenameSelection,
+			canReplaceSelection,
 
 			// Methods
 			fetchFiles,
@@ -1337,11 +1537,15 @@ export default defineComponent({
 			handleDrop,
 			handleDelete,
 			handleRename,
+			handleReplace,
+			handleReplaceFileChange,
 			handleUpdateMetadata,
 			handleShare,
 			handleRefreshCache,
 			handleBulkMove,
+			handleBulkRename,
 			handleBulkDelete,
+			handleBulkReplace,
 			handleBulkRefreshCache,
 			handleMoveComplete,
 			openGallery,

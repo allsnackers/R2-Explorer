@@ -197,7 +197,12 @@ import EmailViewer from "components/preview/EmailViewer.vue";
 import LogGz from "components/preview/logGz.vue";
 import PdfViewer from "components/preview/PdfViewer.vue";
 import { useQuasar } from "quasar";
-import { apiHandler, bytesToMegabytes, ROOT_FOLDER } from "src/appUtils";
+import {
+	apiHandler,
+	bytesToMegabytes,
+	inferMimeTypeFromFilename,
+	ROOT_FOLDER,
+} from "src/appUtils";
 import { parseMarkdown } from "src/parsers/markdown";
 
 export default {
@@ -218,6 +223,7 @@ export default {
 		filename: undefined,
 		fileData: undefined,
 		fileDataEdited: undefined,
+		objectUrl: undefined,
 
 		// Metadata fields
 		fileDescription: "",
@@ -284,6 +290,12 @@ export default {
 		],
 	}),
 	methods: {
+		cleanupObjectUrl() {
+			if (this.objectUrl) {
+				URL.revokeObjectURL(this.objectUrl);
+				this.objectUrl = undefined;
+			}
+		},
 		getType(filename) {
 			for (const config of this.previewConfig) {
 				for (const extension of config.extensions) {
@@ -320,6 +332,7 @@ export default {
 			// }
 
 			this.abortControl = new AbortController();
+			this.cleanupObjectUrl();
 
 			await this.$router.push({
 				name: "files-file",
@@ -354,8 +367,16 @@ export default {
 
 				let data;
 				if (previewConfig.downloadType === "objectUrl") {
-					const blob = new Blob([response.data]);
-					data = URL.createObjectURL(blob);
+					this.cleanupObjectUrl();
+					const contentType =
+						this.file?.httpMetadata?.contentType ||
+						inferMimeTypeFromFilename(this.file?.name);
+					const blob =
+						contentType && contentType.length > 0
+							? new Blob([response.data], { type: contentType })
+							: new Blob([response.data]);
+					this.objectUrl = URL.createObjectURL(blob);
+					data = this.objectUrl;
 				} else if (previewConfig.downloadType === "blob") {
 					data = response.data;
 				} else {
@@ -369,6 +390,8 @@ export default {
 			if (this.abortControl) {
 				this.abortControl.abort();
 			}
+
+			this.cleanupObjectUrl();
 
 			this.cancelEdit();
 			this.cancelMetadataEdit();
@@ -565,6 +588,9 @@ export default {
 				});
 			}
 		},
+	},
+	beforeUnmount() {
+		this.cleanupObjectUrl();
 	},
 	computed: {
 		selectedBucket: function () {

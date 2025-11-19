@@ -131,6 +131,36 @@ export default defineComponent({
 		},
 	},
 	methods: {
+		getComparableName(item) {
+			if (!item) {
+				return "";
+			}
+			const rawName = (item.name || "").trim();
+			if (item.type === "folder") {
+				return rawName.replace(/\/+$/, "");
+			}
+			return rawName;
+		},
+		getParentKey(item) {
+			if (!item?.key) {
+				return "";
+			}
+			if (item.type === "folder") {
+				const trimmedKey = item.key.endsWith("/")
+					? item.key.slice(0, -1)
+					: item.key;
+				const lastSlash = trimmedKey.lastIndexOf("/");
+				if (lastSlash === -1) {
+					return "";
+				}
+				return `${trimmedKey.slice(0, lastSlash + 1)}`;
+			}
+			const lastSlash = item.key.lastIndexOf("/");
+			if (lastSlash === -1) {
+				return "";
+			}
+			return item.key.slice(0, lastSlash + 1);
+		},
 		deleteObject: async function (row) {
 			this.deleteModal = true;
 			this.row = row;
@@ -154,7 +184,7 @@ export default defineComponent({
 		renameObject: async function (row, availableItems = []) {
 			this.renameModal = true;
 			this.row = row;
-			this.renameInput = row.name.trim();
+			this.renameInput = this.getComparableName(row);
 			this.existingItems = availableItems;
 			this.renameServerError = "";
 		},
@@ -182,17 +212,15 @@ export default defineComponent({
 			if (!trimmedName || this.renameError) {
 				return;
 			}
-			const currentName = this.row?.name || "";
+			const currentName = this.getComparableName(this.row) || "";
 			if (trimmedName === currentName) {
 				this.reset();
 				return;
 			}
 
-			const prefix = this.row.key.slice(
-				0,
-				this.row.key.length - currentName.length,
-			);
-			const newKey = `${prefix}${trimmedName}`;
+			const isFolder = this.row?.type === "folder";
+			const parentKey = this.getParentKey(this.row);
+			const newKey = `${parentKey}${trimmedName}${isFolder ? "/" : ""}`;
 
 			this.loading = true;
 			this.renameServerError = "";
@@ -460,11 +488,14 @@ export default defineComponent({
 				return "Name can't contain /";
 			}
 
-			const duplicate = this.existingItems.some(
-				(item) =>
-					item.key !== this.row.key &&
-					(item.name || "").trim().toLowerCase() === value.toLowerCase(),
-			);
+			const duplicate = this.existingItems.some((item) => {
+				if (!item || item.key === this.row.key) {
+					return false;
+				}
+				return (
+					this.getComparableName(item).toLowerCase() === value.toLowerCase()
+				);
+			});
 
 			if (duplicate) {
 				return "An item with this name already exists";
@@ -486,7 +517,7 @@ export default defineComponent({
 				return true;
 			}
 
-			if (value === (this.row.name || "").trim()) {
+			if (value === this.getComparableName(this.row)) {
 				return true;
 			}
 

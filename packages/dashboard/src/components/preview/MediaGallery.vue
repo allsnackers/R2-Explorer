@@ -189,6 +189,7 @@ export default {
 			return buildFileAccessUrl(this.bucket, file.key, {
 				includeCacheVersion: true,
 				cacheVersion,
+				disposition: "inline",
 			});
 		},
 	},

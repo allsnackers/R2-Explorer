@@ -12,7 +12,10 @@
     <q-item clickable v-close-popup @click="refreshCacheVersion" v-if="!isBulkOperation && prop.row.type === 'folder'">
       <q-item-section>Refresh Cache (Recursive)</q-item-section>
     </q-item>
-    <q-item clickable v-close-popup @click="renameObject" v-if="!isBulkOperation && prop.row.type === 'file'">
+    <q-item clickable v-close-popup @click="replaceObject" v-if="!isBulkOperation && prop.row.type === 'file'">
+      <q-item-section>Replace file...</q-item-section>
+    </q-item>
+    <q-item clickable v-close-popup @click="renameObject" v-if="!isBulkOperation">
       <q-item-section>Rename</q-item-section>
     </q-item>
     <q-item clickable v-close-popup @click="updateMetadataObject" v-if="!isBulkOperation && prop.row.type === 'file'">
@@ -68,11 +71,7 @@ export default {
 			return "";
 		},
 		isBulkOperation: function () {
-			return (
-				this.selectedRows.length > 1 ||
-				(this.selectedRows.length === 1 &&
-					this.selectedRows[0].key === this.prop.row.key)
-			);
+			return this.selectedRows.length > 1;
 		},
 		bulkItemCount: function () {
 			return this.selectedRows.length;
@@ -81,6 +80,9 @@ export default {
 	methods: {
 		renameObject: function () {
 			this.$emit("renameObject", this.prop.row);
+		},
+		replaceObject: function () {
+			this.$emit("replaceObject", this.prop.row);
 		},
 		updateMetadataObject: function () {
 			this.$emit("updateMetadataObject", this.prop.row);

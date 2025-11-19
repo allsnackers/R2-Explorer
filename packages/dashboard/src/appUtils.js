@@ -18,6 +18,59 @@ const VIDEO_EXTENSIONS = ["mp4", "ogg", "webm", "mov"];
 const AUDIO_EXTENSIONS = ["mp3", "wav", "flac", "aac", "ogg"];
 const MEDIA_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS]);
 
+const MIME_TYPE_MAP = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	webp: "image/webp",
+	avif: "image/avif",
+	gif: "image/gif",
+	bmp: "image/bmp",
+	svg: "image/svg+xml",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+	flac: "audio/flac",
+	aac: "audio/aac",
+	ogg: "application/ogg",
+	mp4: "video/mp4",
+	webm: "video/webm",
+	mov: "video/quicktime",
+	pdf: "application/pdf",
+	txt: "text/plain",
+	md: "text/markdown",
+	csv: "text/csv",
+	json: "application/json",
+	html: "text/html",
+	htm: "text/html",
+	log: "text/plain",
+	gz: "application/gzip",
+};
+
+const DOUBLE_EXTENSIONS = {
+	"log.gz": "application/gzip",
+};
+
+export const inferMimeTypeFromFilename = (filename = "") => {
+	if (!filename) {
+		return "";
+	}
+
+	const lower = filename.toLowerCase();
+	for (const [suffix, mime] of Object.entries(DOUBLE_EXTENSIONS)) {
+		if (lower.endsWith(suffix)) {
+			return mime;
+		}
+	}
+
+	const parts = lower.split(".");
+	if (parts.length <= 1) {
+		return "";
+	}
+
+	const ext = parts.pop();
+	return (ext && MIME_TYPE_MAP[ext]) || "";
+};
+
 function sanitizeKeyForDirectUrl(key) {
 	if (key && key !== "/" && key.startsWith("/")) {
 		key = key.slice(1);
@@ -166,7 +219,7 @@ export const decode = (key) => {
 export const buildFileAccessUrl = (
 	bucket,
 	key,
-	{ includeCacheVersion = false, cacheVersion } = {},
+	{ includeCacheVersion = false, cacheVersion, disposition } = {},
 ) => {
 	const mainStore = useMainStore();
 	const directLinkSettings = mainStore.directLinkSettings || {};
@@ -174,6 +227,15 @@ export const buildFileAccessUrl = (
 	const resolvedCacheVersion = shouldAppendCache
 		? (cacheVersion ?? Date.now())
 		: undefined;
+	const queryParams = [];
+
+	if (shouldAppendCache) {
+		queryParams.push(`v=${resolvedCacheVersion}`);
+	}
+
+	if (disposition) {
+		queryParams.push(`disposition=${encodeURIComponent(disposition)}`);
+	}
 
 	if (directLinkSettings.enabled && directLinkSettings.baseUrl) {
 		const segments = [directLinkSettings.baseUrl];
@@ -182,15 +244,15 @@ export const buildFileAccessUrl = (
 		}
 		segments.push(sanitizeKeyForDirectUrl(key));
 		let url = segments.filter(Boolean).join("/");
-		if (shouldAppendCache) {
-			url += `${url.includes("?") ? "&" : "?"}v=${resolvedCacheVersion}`;
+		if (queryParams.length > 0) {
+			url += `${url.includes("?") ? "&" : "?"}${queryParams.join("&")}`;
 		}
 		return url;
 	}
 
 	let url = `${mainStore.serverUrl}/api/buckets/${bucket}/${encode(key)}`;
-	if (shouldAppendCache) {
-		url += `?v=${resolvedCacheVersion}`;
+	if (queryParams.length > 0) {
+		url += `?${queryParams.join("&")}`;
 	}
 	return url;
 };
@@ -299,22 +361,32 @@ export const apiHandler = {
 			},
 		});
 	},
-	uploadObjects: async (file, key, bucket, callback) => {
+	uploadObjects: async (file, key, bucket, callback, options = {}) => {
 		return await retryWithBackoff(
 			async () => {
+				const customMetadata = {
+					...(options.customMetadata || {}),
+				};
+				if (options.skipCacheVersion !== true) {
+					customMetadata["cache-version"] = Date.now().toString();
+				}
+
+				const httpMetadata = {
+					...(options.httpMetadata || {}),
+				};
+				const inferredType =
+					file?.type ||
+					inferMimeTypeFromFilename(file?.name || key) ||
+					httpMetadata.contentType;
+				if (inferredType) {
+					httpMetadata.contentType = inferredType;
+				}
+
 				return await api.post(`/buckets/${bucket}/upload`, file, {
 					params: {
 						key: encode(key),
-						httpMetadata: encode(
-							JSON.stringify({
-								contentType: file.type,
-							}),
-						),
-						customMetadata: encode(
-							JSON.stringify({
-								"cache-version": Date.now().toString(),
-							}),
-						),
+						httpMetadata: encode(JSON.stringify(httpMetadata)),
+						customMetadata: encode(JSON.stringify(customMetadata)),
 					},
 					headers: {
 						"Content-Type": "multipart/form-data",
@@ -446,5 +518,6 @@ export const getThumbnailUrl = (file, bucket) => {
 	return buildFileAccessUrl(bucket, file.key, {
 		includeCacheVersion: true,
 		cacheVersion,
+		disposition: "inline",
 	});
 };
