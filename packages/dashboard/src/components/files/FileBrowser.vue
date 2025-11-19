@@ -124,13 +124,14 @@
               <!-- Thumbnail or icon -->
               <div class="file-card-preview">
                 <img
-                  v-if="item.type === 'file' && isMediaFile(item.name)"
-                  :src="getThumbnailUrl(item, bucket)"
+                  v-if="item.type === 'file' && isMediaFile(item.name) && getThumbnailUrlForItem(item)"
+                  :src="getThumbnailUrlForItem(item)"
                   :alt="item.name"
                   class="file-thumbnail-img"
                   loading="lazy"
                   @error="handleImageError($event, item)"
                   @load="handleImageLoad($event, item)"
+                  @mouseenter="loadThumbnailBlobUrl(item)"
                 />
                 <q-icon
                   v-else
@@ -249,13 +250,14 @@
                 <div class="file-list-cell file-list-name">
                   <div class="file-list-name-content">
                     <img
-                      v-if="item.type === 'file' && isMediaFile(item.name) && showThumbnailsInList"
-                      :src="getThumbnailUrl(item, bucket)"
+                      v-if="item.type === 'file' && isMediaFile(item.name) && showThumbnailsInList && getThumbnailUrlForItem(item)"
+                      :src="getThumbnailUrlForItem(item)"
                       :alt="item.name"
                       class="file-list-thumbnail"
                       loading="lazy"
                       @error="handleImageError($event, item)"
                       @load="handleImageLoad($event, item)"
+                      @mouseenter="loadThumbnailBlobUrl(item)"
                     />
                     <q-icon
                       v-else
@@ -556,6 +558,7 @@ import {
 	decode,
 	encode,
 	getThumbnailUrl,
+	getThumbnailBlobUrl,
 	isMediaFile,
 	ROOT_FOLDER,
 } from "../../appUtils";
@@ -618,6 +621,7 @@ export default defineComponent({
 		const touchTimer = ref(null);
 		const touchStartTime = ref(0);
 		const selectAll = ref(false);
+		const thumbnailBlobUrls = ref({}); // Map of file key to blob URL
 
 		// Computed
 		const selectedFolder = computed(() => {
@@ -684,12 +688,22 @@ export default defineComponent({
 		// Methods
 		const fetchFiles = async () => {
 			loading.value = true;
+			// Clear old thumbnail URLs when changing folders
+			thumbnailBlobUrls.value = {};
 			try {
 				items.value = await apiHandler.fetchFile(
 					props.bucket,
 					selectedFolder.value,
 					"/",
 				);
+				// Start loading thumbnails for media files in background
+				const mediaFiles = items.value.filter(
+					(item) => item.type === "file" && isMediaFile(item.name),
+				);
+				// Load first 5 thumbnails immediately, rest on demand
+				for (let i = 0; i < Math.min(5, mediaFiles.length); i++) {
+					loadThumbnailBlobUrl(mediaFiles[i]);
+				}
 			} catch (error) {
 				console.error("Failed to fetch files:", error);
 				$q.notify({
@@ -962,6 +976,21 @@ export default defineComponent({
 		const getItemCount = (_folder) => {
 			// This would need to be implemented with API support
 			return "Folder";
+		};
+
+		const getThumbnailUrlForItem = (item) => {
+			// Return blob URL if available, otherwise return empty string to show fallback
+			return thumbnailBlobUrls.value[item.key] || "";
+		};
+
+		const loadThumbnailBlobUrl = async (item) => {
+			if (thumbnailBlobUrls.value[item.key]) {
+				return; // Already loaded
+			}
+			const blobUrl = await getThumbnailBlobUrl(item, props.bucket);
+			if (blobUrl) {
+				thumbnailBlobUrls.value[item.key] = blobUrl;
+			}
 		};
 
 		const showContextMenu = (_event, item) => {
@@ -1466,6 +1495,12 @@ export default defineComponent({
 		onBeforeUnmount(() => {
 			document.removeEventListener("keydown", handleKeyDown);
 			bus?.off("fetchFiles", fetchFiles);
+			// Clean up blob URLs to prevent memory leaks
+			Object.values(thumbnailBlobUrls.value).forEach((blobUrl) => {
+				if (blobUrl && blobUrl.startsWith("blob:")) {
+					URL.revokeObjectURL(blobUrl);
+				}
+			});
 		});
 
 		// Watch for folder changes
@@ -1499,6 +1534,7 @@ export default defineComponent({
 			currentItem,
 			showThumbnailsInList,
 			selectAll,
+			thumbnailBlobUrls,
 
 			// Computed
 			selectedFolder,
@@ -1530,6 +1566,8 @@ export default defineComponent({
 			handleImageError,
 			handleImageLoad,
 			getItemCount,
+			getThumbnailUrlForItem,
+			loadThumbnailBlobUrl,
 			showContextMenu,
 			handleDragStart,
 			handleDragOver,
