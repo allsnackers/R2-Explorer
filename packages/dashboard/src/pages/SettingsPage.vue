@@ -193,21 +193,14 @@ export default defineComponent({
 	},
 	methods: {
 		loadSettings() {
-			const stored = localStorage.getItem("r2explorer-direct-link-settings");
-			if (stored) {
-				try {
-					const parsed = JSON.parse(stored);
-					this.settings = {
-						...this.settings,
-						...parsed,
-						singleBucketMode: Boolean(parsed?.singleBucketMode),
-					};
-				} catch (e) {
-					console.error("Failed to load settings:", e);
-				}
-			}
+			// Load from the store (which loads from API on app init)
+			this.settings = {
+				...this.settings,
+				...this.mainStore.directLinkSettings,
+				singleBucketMode: Boolean(this.mainStore.directLinkSettings?.singleBucketMode),
+			};
 		},
-		saveSettings() {
+		async saveSettings() {
 			if (this.settings.enabled && !this.settings.baseUrl) {
 				this.q.notify({
 					type: "warning",
@@ -220,26 +213,29 @@ export default defineComponent({
 			this.settings.baseUrl = cleanedBaseUrl;
 			this.settings.singleBucketMode = Boolean(this.settings.singleBucketMode);
 
-			localStorage.setItem(
-				"r2explorer-direct-link-settings",
-				JSON.stringify(this.settings),
-			);
+			const result = await this.mainStore.saveDirectLinkSettings(this.settings);
 
-			this.mainStore.directLinkSettings = { ...this.settings };
-
-			this.q.notify({
-				type: "positive",
-				message: "Settings saved successfully!",
-				timeout: 2000,
-			});
+			if (result.success) {
+				this.q.notify({
+					type: "positive",
+					message: "Settings saved successfully!",
+					timeout: 2000,
+				});
+			} else {
+				this.q.notify({
+					type: "negative",
+					message: result.error || "Failed to save settings. Please check that R2_EXPLORER_SETTINGS KV is configured.",
+					timeout: 5000,
+				});
+			}
 		},
-		resetSettings() {
+		async resetSettings() {
 			this.settings = {
 				enabled: false,
 				baseUrl: "",
 				singleBucketMode: false,
 			};
-			this.saveSettings();
+			await this.saveSettings();
 		},
 		async handleGlobalRefresh() {
 			if (!this.selectedBucketForRefresh) return;

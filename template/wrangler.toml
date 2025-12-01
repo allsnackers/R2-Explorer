@@ -16,3 +16,10 @@ bucket_name = "bucket"
 # Docs: https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/
 # [vars]
 # CF_ACCESS_TEAM_NAME = "your-team-name"
+
+# KV namespace for storing global settings (required for settings persistence)
+# Create a KV namespace: wrangler kv:namespace create "R2_EXPLORER_SETTINGS"
+# Then update the id below with the generated namespace id
+[[kv_namespaces]]
+binding = "R2_EXPLORER_SETTINGS"
+id = "your-kv-namespace-id"

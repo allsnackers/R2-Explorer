@@ -9,3 +9,8 @@ binding = 'teste'
 bucket_name = 'teste'
 preview_bucket_name = 'teste'
 
+# KV namespace for storing global settings
+[[kv_namespaces]]
+binding = "R2_EXPLORER_SETTINGS"
+id = "your-kv-namespace-id"
+

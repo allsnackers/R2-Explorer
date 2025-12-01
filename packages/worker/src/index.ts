@@ -25,6 +25,8 @@ import { dashboardIndex, dashboardRedirect } from "./modules/dashboard";
 import { receiveEmail } from "./modules/emails/receiveEmail";
 import { SendEmail } from "./modules/emails/sendEmail";
 import { GetInfo } from "./modules/server/getInfo";
+import { GetSettings } from "./modules/settings/getSettings";
+import { SaveSettings } from "./modules/settings/saveSettings";
 import type {
 	AppContext,
 	AppEnv,
@@ -114,6 +116,9 @@ export function R2Explorer(config?: R2ExplorerConfig) {
 	}
 
 	openapi.get("/api/server/config", GetInfo);
+
+	openapi.get("/api/settings", GetSettings);
+	openapi.post("/api/settings", SaveSettings);
 
 	openapi.get("/api/buckets/:bucket", ListObjects);
 	openapi.post("/api/buckets/:bucket/move", MoveObject);

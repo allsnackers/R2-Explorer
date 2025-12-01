@@ -22,7 +22,14 @@ export type R2ExplorerConfig = {
 
 export type AppEnv = {
 	ASSETS: Fetcher;
-	[key: string]: R2Bucket;
+	R2_EXPLORER_SETTINGS?: KVNamespace;
+	[key: string]: R2Bucket | Fetcher | KVNamespace | undefined;
+};
+
+export type DirectLinkSettings = {
+	enabled: boolean;
+	baseUrl: string;
+	singleBucketMode: boolean;
 };
 export type AppVariables = {
 	config: R2ExplorerConfig;
