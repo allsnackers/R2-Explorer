@@ -64,10 +64,16 @@ export const useMainStore = defineStore("main", {
 					this.directLinkSettings = { ...settings };
 					return { success: true };
 				}
-				return { success: false, error: response.data?.error || "Unknown error" };
+				return {
+					success: false,
+					error: response.data?.error || "Unknown error",
+				};
 			} catch (e) {
 				console.error("Failed to save settings to API:", e);
-				return { success: false, error: e.message || "Failed to save settings" };
+				return {
+					success: false,
+					error: e.message || "Failed to save settings",
+				};
 			}
 		},
 		async loadServerConfigs(router, q, handleError = false) {

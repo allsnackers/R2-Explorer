@@ -197,7 +197,9 @@ export default defineComponent({
 			this.settings = {
 				...this.settings,
 				...this.mainStore.directLinkSettings,
-				singleBucketMode: Boolean(this.mainStore.directLinkSettings?.singleBucketMode),
+				singleBucketMode: Boolean(
+					this.mainStore.directLinkSettings?.singleBucketMode,
+				),
 			};
 		},
 		async saveSettings() {
@@ -224,7 +226,9 @@ export default defineComponent({
 			} else {
 				this.q.notify({
 					type: "negative",
-					message: result.error || "Failed to save settings. Please check that R2_EXPLORER_SETTINGS KV is configured.",
+					message:
+						result.error ||
+						"Failed to save settings. Please check that R2_EXPLORER_SETTINGS KV is configured.",
 					timeout: 5000,
 				});
 			}
