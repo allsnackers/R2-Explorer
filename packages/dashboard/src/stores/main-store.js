@@ -78,8 +78,6 @@ export const useMainStore = defineStore("main", {
 					error: e.message || "Failed to save settings",
 				};
 			}
-			// Also load no-spaces setting
-			this.loadNoSpacesSetting();
 		},
 		loadNoSpacesSetting() {
 			const stored = localStorage.getItem("r2explorer-no-spaces");
@@ -107,6 +105,7 @@ export const useMainStore = defineStore("main", {
 				this.buckets = response.data.buckets;
 
 				await this.loadDirectLinkSettings();
+				this.loadNoSpacesSetting();
 
 				const url = new URL(window.location.href);
 				if (url.searchParams.get("next")) {
