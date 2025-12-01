@@ -14,7 +14,13 @@ export class GetInfo extends OpenAPIRoute {
 
 		const buckets = [];
 
+		// Known non-bucket bindings to exclude
+		const excludedBindings = ["ASSETS", "R2_EXPLORER_SETTINGS"];
+
 		for (const [key, value] of Object.entries(c.env)) {
+			if (excludedBindings.includes(key)) {
+				continue;
+			}
 			if (
 				value.get &&
 				value.put &&
