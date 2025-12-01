@@ -87,6 +87,29 @@
 
       <q-card class="q-mb-lg">
         <q-card-section>
+          <div class="text-h6">File Naming</div>
+          <div class="text-caption text-grey-7">
+            Configure rules for file and folder names
+          </div>
+        </q-card-section>
+
+        <q-card-section>
+          <q-toggle
+            v-model="mainStore.noSpacesInNames"
+            label="Disallow spaces in names"
+            color="primary"
+            @update:model-value="mainStore.setNoSpacesSetting"
+          />
+
+          <div class="q-mt-md text-caption text-grey-7">
+            When enabled, spaces in uploaded file names will be automatically replaced with underscores.
+            Renaming files and creating folders will also validate against spaces.
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <q-card class="q-mb-lg">
+        <q-card-section>
           <div class="text-h6">Cache Management</div>
           <div class="text-caption text-grey-7">
             Manage cache versions for your files

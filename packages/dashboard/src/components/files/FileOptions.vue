@@ -488,6 +488,10 @@ export default defineComponent({
 				return "Name can't contain /";
 			}
 
+			if (this.mainStore.noSpacesInNames && value.includes(" ")) {
+				return "Spaces are not allowed in names";
+			}
+
 			const duplicate = this.existingItems.some((item) => {
 				if (!item || item.key === this.row.key) {
 					return false;

@@ -59,6 +59,12 @@ export default {
 		openFoldersUploader() {
 			this.$refs.foldersUploader.click();
 		},
+		sanitizeName(name) {
+			if (this.mainStore.noSpacesInNames) {
+				return name.replace(/ /g, "_");
+			}
+			return name;
+		},
 		dragover(_event) {
 			if (this.mainStore.apiReadonly || this.isHover === true) {
 				return;
@@ -97,7 +103,15 @@ export default {
 			const folders = {};
 			for (const file of event.target.files) {
 				const lastIndex = file.webkitRelativePath.lastIndexOf("/");
-				const path = file.webkitRelativePath.slice(0, lastIndex);
+				let path = file.webkitRelativePath.slice(0, lastIndex);
+
+				// Sanitize folder path segments
+				if (this.mainStore.noSpacesInNames) {
+					path = path
+						.split("/")
+						.map((segment) => segment.replace(/ /g, "_"))
+						.join("/");
+				}
 
 				if (folders[path] === undefined) {
 					folders[path] = [];
@@ -161,7 +175,8 @@ export default {
 
 				for (const file of files) {
 					uploadCount += 1;
-					const key = targetFolder + file.name;
+					const sanitizedFileName = this.sanitizeName(file.name);
+					const key = targetFolder + sanitizedFileName;
 
 					const chunkSize = 95 * 1024 * 1024;
 					// Files bigger than 100MB require multipart upload
@@ -263,7 +278,8 @@ export default {
 
 				await filePromise;
 			} else if (item.isDirectory) {
-				const newPath = path ? `${path}/${item.name}` : item.name;
+				const sanitizedName = this.sanitizeName(item.name);
+				const newPath = path ? `${path}/${sanitizedName}` : sanitizedName;
 				if (folders[newPath] === undefined) {
 					folders[newPath] = [];
 				}
