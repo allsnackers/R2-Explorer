@@ -521,3 +521,20 @@ export const getThumbnailUrl = (file, bucket) => {
 		disposition: "inline",
 	});
 };
+
+export const getThumbnailBlobUrl = async (file, bucket) => {
+	try {
+		const response = await api.get(`/buckets/${bucket}/${encode(file.key)}`, {
+			responseType: "arraybuffer",
+		});
+
+		const mimeType =
+			file.httpMetadata?.contentType ||
+			inferMimeTypeFromFilename(file.name);
+		const blob = new Blob([response.data], { type: mimeType });
+		return URL.createObjectURL(blob);
+	} catch (error) {
+		console.error("Failed to load thumbnail:", error);
+		return null;
+	}
+};
