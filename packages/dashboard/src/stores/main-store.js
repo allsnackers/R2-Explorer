@@ -29,19 +29,51 @@ export const useMainStore = defineStore("main", {
 		},
 	},
 	actions: {
-		loadDirectLinkSettings() {
-			const stored = localStorage.getItem("r2explorer-direct-link-settings");
-			if (stored) {
-				try {
-					const parsed = JSON.parse(stored);
+		async loadDirectLinkSettings() {
+			try {
+				const response = await api.get("/settings");
+				if (response.data?.settings) {
 					this.directLinkSettings = {
 						...this.directLinkSettings,
-						...parsed,
-						singleBucketMode: Boolean(parsed?.singleBucketMode),
+						...response.data.settings,
+						singleBucketMode: Boolean(response.data.settings?.singleBucketMode),
 					};
-				} catch (e) {
-					console.error("Failed to load direct link settings:", e);
 				}
+			} catch (e) {
+				console.error("Failed to load direct link settings from API:", e);
+				// Fallback to localStorage for backwards compatibility
+				const stored = localStorage.getItem("r2explorer-direct-link-settings");
+				if (stored) {
+					try {
+						const parsed = JSON.parse(stored);
+						this.directLinkSettings = {
+							...this.directLinkSettings,
+							...parsed,
+							singleBucketMode: Boolean(parsed?.singleBucketMode),
+						};
+					} catch (parseError) {
+						console.error("Failed to parse localStorage settings:", parseError);
+					}
+				}
+			}
+		},
+		async saveDirectLinkSettings(settings) {
+			try {
+				const response = await api.post("/settings", settings);
+				if (response.data?.success) {
+					this.directLinkSettings = { ...settings };
+					return { success: true };
+				}
+				return {
+					success: false,
+					error: response.data?.error || "Unknown error",
+				};
+			} catch (e) {
+				console.error("Failed to save settings to API:", e);
+				return {
+					success: false,
+					error: e.message || "Failed to save settings",
+				};
 			}
 		},
 		async loadServerConfigs(router, q, handleError = false) {
@@ -59,7 +91,7 @@ export const useMainStore = defineStore("main", {
 				this.showHiddenFiles = response.data.config.showHiddenFiles;
 				this.buckets = response.data.buckets;
 
-				this.loadDirectLinkSettings();
+				await this.loadDirectLinkSettings();
 
 				const url = new URL(window.location.href);
 				if (url.searchParams.get("next")) {
