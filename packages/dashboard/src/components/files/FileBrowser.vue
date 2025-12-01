@@ -465,6 +465,15 @@
             <q-btn
               flat
               dense
+              icon="archive"
+              label="Download Zip"
+              color="primary"
+              @click="handleBulkDownloadZip"
+              class="q-mr-sm"
+            />
+            <q-btn
+              flat
+              dense
               icon="drive_file_rename_outline"
               label="Rename"
               :disable="!canRenameSelection"
@@ -554,6 +563,7 @@ import {
 	apiHandler,
 	buildFileAccessUrl,
 	decode,
+	downloadFilesAsZip,
 	encode,
 	getThumbnailUrl,
 	isMediaFile,
@@ -730,20 +740,26 @@ export default defineComponent({
 				} else {
 					selectedItems.value.push(item);
 				}
-			} else if (event.shiftKey && selectedItems.value.length > 0) {
-				// Range selection
-				const lastSelected =
-					selectedItems.value[selectedItems.value.length - 1];
-				const lastIndex = sortedItems.value.findIndex(
-					(i) => i.key === lastSelected.key,
-				);
-				const start = Math.min(lastIndex, index);
-				const end = Math.max(lastIndex, index);
-				for (let i = start; i <= end; i++) {
-					const item = sortedItems.value[i];
-					if (!isSelected(item)) {
-						selectedItems.value.push(item);
+			} else if (event.shiftKey) {
+				// Range selection or start new selection
+				if (selectedItems.value.length > 0) {
+					// Range selection from last selected to current
+					const lastSelected =
+						selectedItems.value[selectedItems.value.length - 1];
+					const lastIndex = sortedItems.value.findIndex(
+						(i) => i.key === lastSelected.key,
+					);
+					const start = Math.min(lastIndex, index);
+					const end = Math.max(lastIndex, index);
+					for (let i = start; i <= end; i++) {
+						const rangeItem = sortedItems.value[i];
+						if (!isSelected(rangeItem)) {
+							selectedItems.value.push(rangeItem);
+						}
 					}
+				} else {
+					// First shift+click: select this item as anchor
+					selectedItems.value.push(item);
 				}
 			} else if (selectionMode.value) {
 				// In selection mode, toggle selection
@@ -1331,6 +1347,69 @@ export default defineComponent({
 			fetchFiles();
 		};
 
+		const handleBulkDownloadZip = async () => {
+			if (selectedItems.value.length === 0) return;
+
+			const notif = $q.notify({
+				group: false,
+				spinner: true,
+				message: "Preparing zip download...",
+				caption: "0%",
+				timeout: 0,
+			});
+
+			try {
+				// Expand folders to get all files
+				const allFiles = [];
+				for (const item of selectedItems.value) {
+					if (item.type === "folder") {
+						const folderContents = await apiHandler.fetchFile(
+							props.bucket,
+							item.key,
+							"",
+						);
+						allFiles.push(...folderContents.filter((f) => f.type === "file"));
+					} else {
+						allFiles.push(item);
+					}
+				}
+
+				if (allFiles.length === 0) {
+					notif({
+						icon: "warning",
+						spinner: false,
+						message: "No files to download",
+						color: "warning",
+						timeout: 3000,
+					});
+					return;
+				}
+
+				const filename = await downloadFilesAsZip(
+					props.bucket,
+					allFiles,
+					(progress) => {
+						notif({ caption: `${Math.round(progress * 100)}%` });
+					},
+				);
+
+				notif({
+					icon: "done",
+					spinner: false,
+					message: `Downloaded ${filename}`,
+					timeout: 2500,
+				});
+			} catch (error) {
+				notif({
+					icon: "error",
+					spinner: false,
+					message: `Failed to create zip: ${error.message}`,
+					color: "negative",
+					timeout: 5000,
+				});
+			}
+		};
+
 		const openGallery = (file) => {
 			const mediaIndex = mediaFiles.value.findIndex((f) => f.key === file.key);
 			if (mediaIndex !== -1) {
@@ -1547,6 +1626,7 @@ export default defineComponent({
 			handleBulkDelete,
 			handleBulkReplace,
 			handleBulkRefreshCache,
+			handleBulkDownloadZip,
 			handleMoveComplete,
 			openGallery,
 			truncateText,

@@ -1,7 +1,40 @@
 import { api } from "boot/axios";
+import { zipSync } from "fflate";
 import { useMainStore } from "stores/main-store";
 
 export const ROOT_FOLDER = "IA=="; // IA== is a space
+
+// Archive misspellings for fun zip names
+const ARCHIVE_MISSPELLINGS = [
+	"arhcive",
+	"arivche",
+	"arcvhie",
+	"archvie",
+	"archiev",
+	"arcihve",
+	"archiive",
+	"archve",
+	"achrive",
+	"acrchive",
+	"archivve",
+	"archhive",
+	"arckive",
+	"archibe",
+	"arshive",
+	"rchive",
+	"achive",
+	"arcive",
+	"archie",
+	"archiv",
+];
+
+export const getRandomArchiveName = () => {
+	const misspelling =
+		ARCHIVE_MISSPELLINGS[
+			Math.floor(Math.random() * ARCHIVE_MISSPELLINGS.length)
+		];
+	return `${misspelling}.zip`;
+};
 
 const IMAGE_EXTENSIONS = [
 	"png",
@@ -520,4 +553,42 @@ export const getThumbnailUrl = (file, bucket) => {
 		cacheVersion,
 		disposition: "inline",
 	});
+};
+
+export const downloadFilesAsZip = async (bucket, files, onProgress) => {
+	const zipData = {};
+	const total = files.length;
+
+	for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		const response = await api.get(`/buckets/${bucket}/${encode(file.key)}`, {
+			responseType: "arraybuffer",
+		});
+
+		// Use the file name (or key if no name) for the zip entry
+		const fileName = file.name || file.key.split("/").pop();
+		zipData[fileName] = new Uint8Array(response.data);
+
+		if (onProgress) {
+			onProgress((i + 1) / total);
+		}
+	}
+
+	const zipped = zipSync(zipData);
+
+	// Generate misspelled archive name
+	const filename = getRandomArchiveName();
+
+	// Download
+	const blob = new Blob([zipped], { type: "application/zip" });
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement("a");
+	link.href = url;
+	link.download = filename;
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
+
+	return filename;
 };

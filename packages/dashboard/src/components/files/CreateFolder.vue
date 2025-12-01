@@ -11,7 +11,7 @@
         <q-card-section class="q-pt-none">
           <q-input dense v-model="newFolderName" autofocus
                    lazy-rules
-                   :rules="[ val => val && val.length > 0 || 'Please type something']" />
+                   :rules="folderNameRules" />
         </q-card-section>
 
         <q-card-actions align="right" class="text-primary">
@@ -68,6 +68,18 @@ export default defineComponent({
 				return decode(this.$route.params.folder);
 			}
 			return "";
+		},
+		folderNameRules: function () {
+			const rules = [
+				(val) => (val && val.length > 0) || "Please type something",
+			];
+			if (this.mainStore.noSpacesInNames) {
+				rules.push(
+					(val) =>
+						!val.includes(" ") || "Spaces are not allowed in folder names",
+				);
+			}
+			return rules;
 		},
 	},
 	setup() {

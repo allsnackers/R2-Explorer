@@ -19,6 +19,9 @@ export const useMainStore = defineStore("main", {
 			baseUrl: "",
 			singleBucketMode: false,
 		},
+
+		// File naming settings
+		noSpacesInNames: true, // default ON
 	}),
 	getters: {
 		serverUrl() {
@@ -76,6 +79,16 @@ export const useMainStore = defineStore("main", {
 				};
 			}
 		},
+		loadNoSpacesSetting() {
+			const stored = localStorage.getItem("r2explorer-no-spaces");
+			if (stored !== null) {
+				this.noSpacesInNames = stored === "true";
+			}
+		},
+		setNoSpacesSetting(value) {
+			this.noSpacesInNames = value;
+			localStorage.setItem("r2explorer-no-spaces", String(value));
+		},
 		async loadServerConfigs(router, q, handleError = false) {
 			// This is the initial requests to server, that also checks if user needs auth
 
@@ -92,6 +105,7 @@ export const useMainStore = defineStore("main", {
 				this.buckets = response.data.buckets;
 
 				await this.loadDirectLinkSettings();
+				this.loadNoSpacesSetting();
 
 				const url = new URL(window.location.href);
 				if (url.searchParams.get("next")) {
